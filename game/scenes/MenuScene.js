@@ -29,7 +29,7 @@ export class MenuScene extends Phaser.Scene {
     for (let y = 0; y < GAME_HEIGHT; y += 80) gridGfx.lineBetween(0, y, GAME_WIDTH, y);
 
     // Title
-    const title = this.add.text(GAME_WIDTH / 2, 160, 'MIDNIGHT\nNETWORK', {
+    const title = this.add.text(GAME_WIDTH / 2, 160, 'GHOST\nCYPHER', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '36px',
       color: '#00ff41',
@@ -94,7 +94,7 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-ENTER', () => this._select());
 
     // Version footer
-    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 24, 'MIDNIGHT NETWORK ZK PROOF DEMO — v1.0.0', {
+    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 24, 'GHOST CYPHER ZK PROOF DEMO — v1.0.0', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '6px',
       color: '#00aa22',
@@ -282,7 +282,7 @@ export class MenuScene extends Phaser.Scene {
     this._closeOverlay();
     this._openOverlay('ABOUT', (panel, startY) => {
       const lines = [
-        'MIDNIGHT NETWORK: GUESS WHO',
+        'GHOST CYPHER',
         '',
         'IDENTIFY THE HIDDEN SPY AMONG',
         '16 MILITARY OPERATIVES USING',

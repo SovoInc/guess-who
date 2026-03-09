@@ -6,16 +6,10 @@ import { ResultScene } from './scenes/ResultScene.js';
 import { GAME_WIDTH, GAME_HEIGHT } from './constants.js';
 
 export function createGame(parent) {
-  // Use stacked layout for narrow viewports
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
-  const stacked = vw < 900;
-  const w = stacked ? 860  : GAME_WIDTH;
-  const h = stacked ? 1260 : GAME_HEIGHT;
-
   return new Phaser.Game({
     type: Phaser.AUTO,
-    width:  w,
-    height: h,
+    width:  GAME_WIDTH,
+    height: GAME_HEIGHT,
     backgroundColor: '#000000',
     parent,
     scene: [BootScene, MenuScene, GameScene, ResultScene],
@@ -29,6 +23,7 @@ export function createGame(parent) {
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
+      min: { width: GAME_WIDTH, height: GAME_HEIGHT },
     },
   });
 }

@@ -33,9 +33,9 @@ export class CharacterCard {
 
     // Scale font sizes proportionally based on card width
     const scale = cw / CARD_W;
-    const fs8  = Math.max(5, Math.floor(8  * scale)) + 'px';
-    const fs6  = Math.max(4, Math.floor(6  * scale)) + 'px';
-    const fs5  = Math.max(4, Math.floor(5  * scale)) + 'px';
+    const fs8  = Math.max(7, Math.floor(10 * scale)) + 'px';
+    const fs6  = Math.max(6, Math.floor(8  * scale)) + 'px';
+    const fs5  = Math.max(5, Math.floor(7  * scale)) + 'px';
 
     // Codename
     this.nameText = scene.add.text(cw / 2, ch - 54 * scale, character.codename, {
@@ -260,6 +260,23 @@ export class CharacterCard {
       this.scene.tweens.killTweensOf(this.bg);
       this.bg.setAlpha(1);
       this._drawBg(COLORS.PANEL_BG, COLORS.DIM);
+    }
+  }
+
+  setPlayerSpy(active) {
+    if (!this._goldBorder) {
+      const { cw, ch } = this;
+      this._goldBorder = this.scene.add.graphics();
+      this.container.add(this._goldBorder);
+    }
+    this._goldBorder.clear();
+    if (active) {
+      const { cw, ch } = this;
+      this._goldBorder.lineStyle(2, 0xffd700, 1);
+      this._goldBorder.strokeRect(1, 1, cw - 2, ch - 2);
+      // inner glow line
+      this._goldBorder.lineStyle(1, 0xffd700, 0.4);
+      this._goldBorder.strokeRect(3, 3, cw - 6, ch - 6);
     }
   }
 

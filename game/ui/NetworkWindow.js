@@ -1,9 +1,12 @@
 import * as Phaser from 'phaser';
 import { COLORS, SIDEBAR_X, SIDEBAR_W } from '../constants.js';
 
-const LINE_H = 12;
-const LOG_TOP_OFFSET = 36; // px below panel top where log starts
-const PROGRESS_BAR_H = 20; // reserved at bottom for progress bar
+const LINE_GAP = 10;      // px gap between entries (after each entry's own height)
+const LINE_SPACING = 4;   // extra px between wrapped lines within an entry
+const FONT_SIZE = '7px';
+const LOG_TOP_OFFSET = 42; // px below panel top where log starts
+const PROGRESS_BAR_H = 30; // reserved at bottom for progress bar
+const MAX_LOG_TEXTS = 30;  // pool size — more than enough visible entries
 
 export class NetworkWindow {
   constructor(scene, y, height, x, w) {
@@ -12,13 +15,11 @@ export class NetworkWindow {
     this.y = y;
     this.w = w !== undefined ? w : SIDEBAR_W;
     this.h = height;
-    this.logLines = []; // all lines ever logged
+    this.logLines = [];
     this.proofTimers = [];
-    this._scrollOffset = 0; // 0 = pinned to bottom (latest visible)
+    this._scrollOffset = 0; // 0 = pinned to bottom
 
-    // Compute how many lines fit in the visible area
-    const logAreaH = height - LOG_TOP_OFFSET - PROGRESS_BAR_H;
-    this._maxVisible = Math.max(1, Math.floor(logAreaH / LINE_H));
+    this._logAreaH = height - LOG_TOP_OFFSET - PROGRESS_BAR_H;
 
     this._build();
   }
@@ -47,41 +48,43 @@ export class NetworkWindow {
     });
 
     // Title bar
-    this.titleText = scene.add.text(x + 8, y + 6, '[ MIDNIGHT NETWORK ]', {
+    this.titleText = scene.add.text(x + 8, y + 6, '[ GHOST CYPHER ]', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '7px',
+      fontSize: '9px',
       color: '#00ff41',
     });
 
     // Status
-    this.statusText = scene.add.text(x + 8, y + 20, 'STATUS: CONNECTED', {
+    this.statusText = scene.add.text(x + 8, y + 22, 'STATUS: CONNECTED', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '6px',
+      fontSize: '7px',
       color: '#00aa22',
     });
 
-    // Log text objects (one per visible row)
+    // Pool of text objects for log rendering
     this.logTexts = [];
-    for (let i = 0; i < this._maxVisible; i++) {
-      const t = scene.add.text(x + 8, y + LOG_TOP_OFFSET + i * LINE_H, '', {
+    for (let i = 0; i < MAX_LOG_TEXTS; i++) {
+      const t = scene.add.text(x + 8, y + LOG_TOP_OFFSET, '', {
         fontFamily: "'Press Start 2P', monospace",
-        fontSize: '6px',
+        fontSize: FONT_SIZE,
         color: '#00aa22',
-        wordWrap: { width: w - 16 },
+        wordWrap: { width: w - 20 },
+        lineSpacing: LINE_SPACING,
       });
+      t.setVisible(false);
       this.logTexts.push(t);
     }
 
-    // Clip log text to panel bounds using a mask (setVisible(false) hides render but mask still works)
+    // Clip log text to panel bounds
     const maskGfx = scene.add.graphics();
     maskGfx.fillStyle(0xffffff);
-    maskGfx.fillRect(x, y + LOG_TOP_OFFSET, w, h - LOG_TOP_OFFSET - PROGRESS_BAR_H);
+    maskGfx.fillRect(x, y + LOG_TOP_OFFSET, w, this._logAreaH);
     maskGfx.setVisible(false);
     const mask = maskGfx.createGeometryMask();
     this.logTexts.forEach(t => t.setMask(mask));
     this._maskGfx = maskGfx;
 
-    // Scroll indicator (small scrollbar on right edge)
+    // Scroll indicator
     this.scrollBarGfx = scene.add.graphics();
 
     // Progress bar area
@@ -89,19 +92,18 @@ export class NetworkWindow {
     this.progressFg = scene.add.graphics();
     this.progressText = scene.add.text(x + 8, y + h - 14, '', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '6px',
+      fontSize: '7px',
       color: '#00ff41',
     });
 
-    // Mouse wheel scrolling on the panel hit area
+    // Mouse wheel scrolling
     const hitZone = scene.add.rectangle(x + w / 2, y + h / 2, w, h, 0, 0)
       .setInteractive();
     hitZone.on('wheel', (_ptr, _dx, dy) => {
-      // dy > 0 = scroll down (towards newer), dy < 0 = scroll up (towards older)
       this._scrollOffset = Phaser.Math.Clamp(
-        this._scrollOffset - Math.sign(dy),
+        this._scrollOffset + Math.sign(dy),
         0,
-        Math.max(0, this.logLines.length - this._maxVisible)
+        this.logLines.length
       );
       this._refresh();
     });
@@ -110,44 +112,87 @@ export class NetworkWindow {
 
   log(message, color = '#00aa22') {
     this.logLines.push({ message, color });
-    // Auto-scroll to bottom only if already pinned there
-    const maxScroll = Math.max(0, this.logLines.length - this._maxVisible);
-    if (this._scrollOffset >= maxScroll - 1) {
-      this._scrollOffset = maxScroll;
-    }
+    this._scrollOffset = 0; // pin to bottom
     this._refresh();
   }
 
-  _refresh() {
-    const total = this.logLines.length;
-    const maxScroll = Math.max(0, total - this._maxVisible);
-    this._scrollOffset = Phaser.Math.Clamp(this._scrollOffset, 0, maxScroll);
-
-    const startIdx = maxScroll - this._scrollOffset;
-
-    this.logTexts.forEach((t, i) => {
-      const line = this.logLines[startIdx + i];
-      if (line) {
-        t.setText('> ' + line.message);
-        t.setColor(line.color);
-      } else {
-        t.setText('');
-      }
-    });
-
-    this._drawScrollBar(total, startIdx);
+  // Measure how tall a given message renders (in px) using a temp off-screen text
+  _measureHeight(message) {
+    if (!this._measureText) {
+      this._measureText = this.scene.add.text(-9999, -9999, '', {
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: FONT_SIZE,
+        wordWrap: { width: this.w - 20 },
+        lineSpacing: LINE_SPACING,
+      }).setVisible(false);
+    }
+    this._measureText.setText('> ' + message);
+    return this._measureText.height;
   }
 
-  _drawScrollBar(total, startIdx) {
+  _refresh() {
+    const { x, y, w } = this;
+    const logAreaBottom = y + LOG_TOP_OFFSET + this._logAreaH;
+    const total = this.logLines.length;
+
+    // Hide all pooled texts first
+    this.logTexts.forEach(t => { t.setText(''); t.setVisible(false); });
+
+    if (total === 0) { this._drawScrollBar(0); return; }
+
+    // Build heights array for all lines (cached on the logLine object)
+    for (const line of this.logLines) {
+      if (line.height === undefined) {
+        line.height = this._measureHeight(line.message);
+      }
+    }
+
+    // Determine visible window from the bottom, working backwards
+    // _scrollOffset=0 → show latest; each increment scrolls up by one entry
+    const anchorIdx = Math.max(0, total - 1 - this._scrollOffset);
+
+    // Collect entries that fit in logAreaH, starting from anchorIdx going up
+    const visible = [];
+    let usedH = 0;
+    for (let i = anchorIdx; i >= 0; i--) {
+      const entryH = this.logLines[i].height + LINE_GAP;
+      if (usedH + this.logLines[i].height > this._logAreaH && visible.length > 0) break;
+      visible.unshift(i);
+      usedH += entryH;
+    }
+
+    // Position entries bottom-up from logAreaBottom
+    let curY = logAreaBottom;
+    // First pass: measure total height of visible entries
+    let totalVisH = 0;
+    for (const idx of visible) totalVisH += this.logLines[idx].height + LINE_GAP;
+    // Start from top of log area
+    curY = y + LOG_TOP_OFFSET;
+
+    visible.forEach((lineIdx, slot) => {
+      if (slot >= this.logTexts.length) return;
+      const line = this.logLines[lineIdx];
+      const t = this.logTexts[slot];
+      t.setPosition(x + 8, curY);
+      t.setText('> ' + line.message);
+      t.setColor(line.color);
+      t.setVisible(true);
+      curY += line.height + LINE_GAP;
+    });
+
+    this._drawScrollBar(total);
+  }
+
+  _drawScrollBar(total) {
     const { x, y, w, h } = this;
     const gfx = this.scrollBarGfx;
     gfx.clear();
 
-    if (total <= this._maxVisible) return; // no scrollbar needed
+    if (total <= 1) return;
 
     const trackX = x + w - 5;
     const trackY = y + LOG_TOP_OFFSET;
-    const trackH = h - LOG_TOP_OFFSET - PROGRESS_BAR_H;
+    const trackH = this._logAreaH;
 
     // Track
     gfx.fillStyle(COLORS.PANEL_BG, 1);
@@ -155,9 +200,10 @@ export class NetworkWindow {
     gfx.lineStyle(1, COLORS.DIM, 0.5);
     gfx.strokeRect(trackX, trackY, 3, trackH);
 
-    // Thumb
-    const thumbH = Math.max(6, Math.floor(trackH * this._maxVisible / total));
-    const thumbY = trackY + Math.floor((trackH - thumbH) * startIdx / Math.max(1, total - this._maxVisible));
+    // Thumb — scrollOffset=0 = bottom, higher = older
+    const maxScroll = Math.max(1, total - 1);
+    const thumbH = Math.max(6, Math.floor(trackH / Math.max(total, 1) * 3));
+    const thumbY = trackY + Math.floor((trackH - thumbH) * (1 - this._scrollOffset / maxScroll));
     gfx.fillStyle(COLORS.BORDER, 1);
     gfx.fillRect(trackX, thumbY, 3, thumbH);
   }
@@ -189,7 +235,6 @@ export class NetworkWindow {
   }
 
   runProofAnimation(onComplete, soundSynth) {
-    // Clear old timers
     this.proofTimers.forEach(t => t.remove());
     this.proofTimers = [];
 
@@ -218,7 +263,6 @@ export class NetworkWindow {
       this.proofTimers.push(t);
     });
 
-    // Final result
     const finalTimer = this.scene.time.delayedCall(3600, () => {
       if (onComplete) onComplete();
     });
@@ -231,7 +275,6 @@ export class NetworkWindow {
       this.log(`HASH: ${hash ? hash.slice(0, 18) + '...' : '0x???'}`, '#00aa22');
       if (soundSynth) soundSynth.proofSuccess();
     } else {
-      this.log('PROOF FAILED ✗', '#ff0000');
       if (soundSynth) soundSynth.proofFail();
     }
   }
@@ -254,6 +297,7 @@ export class NetworkWindow {
     this.titleText.destroy();
     this.statusText.destroy();
     this.logTexts.forEach(t => t.destroy());
+    if (this._measureText) this._measureText.destroy();
     this.progressBg.destroy();
     this.progressFg.destroy();
     this.progressText.destroy();

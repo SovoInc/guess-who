@@ -35,7 +35,7 @@ export class QuestionPanel {
     CATEGORY_LABELS.forEach((cat, i) => {
       const x = 8 + i * (BTN_W + 6);
       this._makeButton(x, y + 6, BTN_W, 38, cat, () => {
-        if (!this.disabled) this._showPicker(cat);
+        if (!this.disabled) { this.stopFlash(); this._showPicker(cat); }
       });
     });
 
@@ -164,9 +164,47 @@ export class QuestionPanel {
     });
   }
 
+  _drawButtons(on) {
+    this.buttons.forEach(({ gfx, text, hit }) => {
+      const x = hit.x - hit.width / 2;
+      const y = hit.y - hit.height / 2;
+      const w = hit.width;
+      const h = hit.height;
+      gfx.clear();
+      gfx.fillStyle(on ? COLORS.BORDER : COLORS.PANEL_BG, 1);
+      gfx.fillRect(x, y, w, h);
+      gfx.lineStyle(1, on ? COLORS.DIM : COLORS.BORDER, 1);
+      gfx.strokeRect(x, y, w, h);
+      text.setColor(on ? '#39ff14' : '#00cc33');
+    });
+  }
+
+  flash() {
+    this.stopFlash();
+    this._blinkState = false;
+    this._blinkTimer = this.scene.time.addEvent({
+      delay: 400,
+      loop: true,
+      callback: () => {
+        if (this.disabled || this._enemyTurn) { this.stopFlash(); return; }
+        this._blinkState = !this._blinkState;
+        this._drawButtons(this._blinkState);
+      },
+    });
+  }
+
+  stopFlash() {
+    if (this._blinkTimer) {
+      this._blinkTimer.remove();
+      this._blinkTimer = null;
+    }
+    this._blinkState = false;
+    this._drawButtons(false);
+  }
+
   setDisabled(val) {
     this.disabled = val;
-    if (val) this._hidePicker();
+    if (val) { this._hidePicker(); this.stopFlash(); }
     if (!this._enemyTurn) {
       this.buttons.forEach(({ text }) => {
         text.setColor(val ? '#336633' : '#00cc33');
@@ -188,6 +226,7 @@ export class QuestionPanel {
   }
 
   destroy() {
+    this.stopFlash();
     this._hidePicker();
     this.buttons.forEach(({ gfx, text, hit }) => {
       gfx.destroy(); text.destroy(); hit.destroy();

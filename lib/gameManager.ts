@@ -100,14 +100,19 @@ export async function answerQuestion(
   value: string
 ): Promise<'YES' | 'NO' | null> {
   const session = await getSession(sessionId);
-  if (!session) return null;
+  if (!session) {
+    console.error(`[answerQuestion] session not found: ${sessionId}`);
+    return null;
+  }
 
   const spy = session.characters[session.spy_id];
   const cat = category.toLowerCase() as keyof Character;
 
   if (!['rank', 'specialty', 'origin', 'feature'].includes(cat)) return null;
 
-  return String(spy[cat]).toUpperCase() === value.toUpperCase() ? 'YES' : 'NO';
+  const spyVal = String(spy[cat]).toUpperCase();
+  const queryVal = value.toUpperCase();
+  return spyVal === queryVal ? 'YES' : 'NO';
 }
 
 export async function evaluateGuess(

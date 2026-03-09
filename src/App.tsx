@@ -22,7 +22,7 @@ export default function App() {
   return (
     <div
       ref={containerRef}
-      style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}
+      style={{ width: '100%', height: '100%', minWidth: '1280px', minHeight: '720px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}
     />
   );
 }
