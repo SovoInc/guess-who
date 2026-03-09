@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="3" failures="0" errors="0" time="0.028085917">
+    <testsuite name="src/test/counter.test.ts" timestamp="2026-03-05T17:24:55.461Z" hostname="johns-MacBook-Pro.local" tests="3" failures="0" errors="0" skipped="0" time="0.028085917">
+        <testcase classname="src/test/counter.test.ts" name="Counter smart contract &gt; generates initial ledger state deterministically" time="0.021779584">
+        </testcase>
+        <testcase classname="src/test/counter.test.ts" name="Counter smart contract &gt; properly initializes ledger state and private state" time="0.00250925">
+        </testcase>
+        <testcase classname="src/test/counter.test.ts" name="Counter smart contract &gt; increments the counter correctly" time="0.002996375">
+        </testcase>
+    </testsuite>
+</testsuites>
