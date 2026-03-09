@@ -4,7 +4,7 @@ import { applyCRTOverlay } from '../utils/crt.js';
 import { SoundSynth } from '../audio/SoundSynth.js';
 
 const BOOT_LINES = [
-  'MIDNIGHT NETWORK OS v2.7.1',
+  'GHOST CYPHER OS v2.7.1',
   'INITIALIZING SECURE CHANNEL...',
   'LOADING ENCRYPTION MODULES...',
   'CALIBRATING ZK PROOF CIRCUITS...',

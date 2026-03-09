@@ -89,6 +89,7 @@ export function startSponsorServer(ctx: WalletContext, port = 3001): void {
   app.post('/api/session/start', async (_req, res) => {
     try {
       const result = await createSession();
+      logger.info(`Session created: ${result.sessionId}`);
       res.json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

@@ -54,7 +54,7 @@ export class ResultScene extends Phaser.Scene {
       lines.push({ text: 'OPERATIVE IDENTIFIED:', color: '#00aa22' });
       lines.push({ text: spy ? spy.codename : 'UNKNOWN', color: '#00ff41', large: true });
       lines.push({ text: '', color: '#00aa22' });
-      lines.push({ text: 'ZK PROOF VERIFIED ON MIDNIGHT NETWORK', color: '#00aa22' });
+      lines.push({ text: 'ZK PROOF VERIFIED ON GHOST CYPHER', color: '#00aa22' });
       if (proof?.hash) {
         const hashShort = proof.hash.slice(0, 26) + '...';
         lines.push({ text: `HASH: ${hashShort}`, color: '#006622' });

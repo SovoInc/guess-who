@@ -34,7 +34,6 @@ export class GameScene extends Phaser.Scene {
   init(data) {
     this.sessionId = data.sessionId;
     this.walletAddress = data.walletAddress;
-    // Use server-generated randomized roster; fall back to static CHARACTERS if missing
     this.characters = data.characters || CHARACTERS;
     this.state = {
       eliminated: new Set(),
@@ -71,7 +70,6 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.sound = this.registry.get('sound');
     this.cameras.main.fadeIn(500, 0, 0, 0);
-    console.log('[midnight] GameScene create — __midnightContract:', window.__midnightContract ? 'SET' : 'NOT SET');
 
     // Compute responsive layout — all build methods use this._L instead of constants
     this._L = this._computeLayout();
@@ -105,6 +103,7 @@ export class GameScene extends Phaser.Scene {
     if (this.currentTurn === 'player') {
       this.questionPanel.setDisabled(false);
       this.questionPanel.setEnemyTurn(false);
+      this.time.delayedCall(500, () => this.questionPanel.flash());
     } else {
       this.questionPanel.setDisabled(true);
       this.questionPanel.setEnemyTurn(true);
@@ -119,34 +118,25 @@ export class GameScene extends Phaser.Scene {
   _computeLayout() {
     const gameW = this.scale.width;
     const gameH = this.scale.height;
-    const stacked = gameW < 900;
 
     const hudH    = 50;
     const qBarH   = 50;
     const gridX   = 20;
     const gridY   = hudH + 8;
-    const cardW   = stacked ? Math.floor((gameW - gridX * 2 - 3 * 8) / 4) : CARD_W;
-    const cardH   = stacked ? Math.floor(cardW * 0.74) : CARD_H;
-    const cardGap = stacked ? 6 : CARD_GAP;
+    const cardW   = CARD_W;
+    const cardH   = CARD_H;
+    const cardGap = CARD_GAP;
 
     const gridW   = 4 * cardW + 3 * cardGap;
     const gridH   = 4 * cardH + 3 * cardGap;
 
-    // Column (sidebar) — wide: to right of grid; stacked: below grid
     const colGap  = 12;
-    let colX, colY, colW;
-    if (stacked) {
-      colX = gridX;
-      colY = gridY + gridH + colGap;
-      colW = gameW - gridX * 2;
-    } else {
-      colX = gridX + gridW + colGap;
-      colY = gridY;
-      colW = gameW - colX - 8;
-    }
+    const colX    = gridX + gridW + colGap;
+    const colY    = gridY;
+    const colW    = gameW - colX - 8;
 
     return {
-      gameW, gameH, stacked,
+      gameW, gameH, stacked: false,
       hudH, qBarH,
       gridX, gridY, cardW, cardH, cardGap,
       gridW, gridH,
@@ -157,10 +147,10 @@ export class GameScene extends Phaser.Scene {
   // ── Top Bar ──────────────────────────────────────────────────────────
 
   _buildTopBar() {
-    const { gameW, stacked } = this._L;
+    const { gameW } = this._L;
     const h = 50;
-    const fs = stacked ? '7px' : '9px';
-    const fs2 = stacked ? '5px' : '7px';
+    const fs = '9px';
+    const fs2 = '7px';
 
     const gfx = this.add.graphics();
     gfx.fillStyle(COLORS.PANEL_BG, 1);
@@ -199,7 +189,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     const playerSpy = this.characters[this.playerSpyId];
-    this.add.text(gameW / 2 - 80, 32, `YOUR SPY: ${playerSpy.codename}`, {
+    this.add.text(gameW / 2 - 80, 32, `YOUR AGENT: ${playerSpy.codename}`, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: fs2,
       color: '#ffaa00',
@@ -242,8 +232,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   _calcScore(correct) {
+    if (!correct) return 0;
     const s = this.state;
-    return (s.questionsLeft * 50) + (s.timeSeconds * 2) + (correct ? 500 : 0);
+    return (s.questionsLeft * 50) + (s.timeSeconds * 2) + 500;
   }
 
   // ── Player Card Grid ─────────────────────────────────────────────────
@@ -259,6 +250,7 @@ export class GameScene extends Phaser.Scene {
       const card = new CharacterCard(this, x, y, char, (c) => this._onCardClick(c), cardW, cardH);
       this.cards.push(card);
     });
+    this.cards[this.playerSpyId].setPlayerSpy(true);
   }
 
   _onCardClick(character) {
@@ -378,14 +370,14 @@ export class GameScene extends Phaser.Scene {
 
     this.add.text(bx + 8, by + 6, '[ CPU BOARD ]', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '7px',
+      fontSize: '9px',
       color: '#ff4444',
     });
 
     // CPU timer display (inside board)
     this.cpuTimerText = this.add.text(bx + boardW - 8, by + 6, 'CPU: 3:00', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '7px',
+      fontSize: '9px',
       color: '#ff4444',
     }).setOrigin(1, 0);
 
@@ -410,7 +402,7 @@ export class GameScene extends Phaser.Scene {
       // Only show agent codename
       const nameT = this.add.text(cx + MINI_W / 2, cy + miniH / 2, char.codename, {
         fontFamily: "'Press Start 2P', monospace",
-        fontSize: '5px',
+        fontSize: '7px',
         color: '#ff4444',
         align: 'center',
       }).setOrigin(0.5, 0.5);
@@ -433,7 +425,7 @@ export class GameScene extends Phaser.Scene {
     // CPU status text at bottom of board
     this.cpuStatusText = this.add.text(bx + 8, by + boardH - statusH, 'CPU: ANALYZING...', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '6px',
+      fontSize: '8px',
       color: '#cc3333',
     });
   }
@@ -1063,9 +1055,12 @@ export class GameScene extends Phaser.Scene {
   _cpuTimeUp() {
     if (this.cpu.done || this.state.gameOver) return;
     this.cpu.done = true;
-    this.networkWindow.log('CPU TIMER EXPIRED — CPU LOSES!', '#00ff41');
-    this.cpuStatusText.setText('CPU: TIME EXPIRED');
-    // Player can keep playing
+    this.networkWindow.log('CPU TIMER EXPIRED — ENEMY NEUTRALIZED', '#00ff41');
+    this.cpuStatusText.setText('CPU: NEUTRALIZED');
+    // If it expired during CPU's turn, hand control back to player
+    if (this.currentTurn === 'cpu') {
+      this.time.delayedCall(800, () => this._endCpuTurn());
+    }
   }
 
   _timeUp() {
@@ -1150,7 +1145,7 @@ export class GameScene extends Phaser.Scene {
         if (this.dialogLine1) this.dialogLine1.setText('[ RESPONSE ]').setColor('#ff6600');
         this._typeDialogText(this.dialogLine2, `→ ${answer}`, color, () => {
           this._runChainVerify(answerBool, () => {
-            this.networkWindow.log(`⛓ CHAIN: ${answerBool ? 'TRUE' : 'FALSE'}`, answerBool ? '#00ff41' : '#ff4444');
+            this.networkWindow.log(`⛓ CHAIN: ${answerBool ? 'CONFIRMED' : 'NEGATIVE'}`, answerBool ? '#00ff41' : '#ff4444');
 
             if (!answerBool && !this.cpu.done) {
               this._penalizeCpuTime(LIE_PENALTY);
@@ -1353,10 +1348,10 @@ export class GameScene extends Phaser.Scene {
         this.dialogLine1.setText(`YOU: ${playerAnswer}${wasLie ? ' [LIE]' : ''}`).setColor(wasLie ? '#ff4444' : answerColor);
       }
 
-      // Chain verify — truth value is the CORRECT answer (chain always knows)
-      const truthBool = correctAnswer === 'YES';
+      // Chain verify — truth value is whether the player was honest
+      const truthBool = !wasLie;
       this._runChainVerify(truthBool, () => {
-        this.networkWindow.log(`⛓ CHAIN: ${truthBool ? 'TRUE' : 'FALSE'}`, truthBool ? '#00ff41' : '#ff4444');
+        this.networkWindow.log(`⛓ CHAIN: ${truthBool ? 'VERIFIED' : 'DECEPTION DETECTED'}`, truthBool ? '#00ff41' : '#ff4444');
 
         if (wasLie) {
           this._penalizePlayerTime(LIE_PENALTY);
@@ -1394,6 +1389,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     if (!s.gameOver && s.questionsLeft > 0 && !s.declaringMode) {
       this.questionPanel.setDisabled(false);
+      this.questionPanel.flash();
       this.networkWindow.log('YOUR TURN — ASK A QUESTION', '#00ff41');
       this._setDialogIdle();
     }
@@ -1459,7 +1455,7 @@ export class GameScene extends Phaser.Scene {
         });
       });
     } else {
-      this.networkWindow.log(`CPU WRONG — ${playerSpy.codename} IS YOUR SPY`, '#00ff41');
+      this.networkWindow.log(`CPU WRONG — YOUR AGENT IS ${playerSpy.codename}`, '#00ff41');
       this.cpuStatusText.setText('CPU: MISSION FAILED');
       // CPU lost — hand turn to player for remaining questions
       this._endCpuTurn();

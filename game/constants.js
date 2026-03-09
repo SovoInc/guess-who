@@ -70,7 +70,7 @@ export const GAME_WIDTH  = 1280;
 export const GAME_HEIGHT = 720;
 
 export const CARD_W = 200;
-export const CARD_H = 148;
+export const CARD_H = 144;
 export const CARD_GAP = 8;
 export const GRID_X = 20;
 export const GRID_Y = 60;
