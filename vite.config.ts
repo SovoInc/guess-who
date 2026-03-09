@@ -1,13 +1,10 @@
 import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
 import { viteCommonjs } from '@originjs/vite-plugin-commonjs';
 import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
-
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   define: {
@@ -21,7 +18,6 @@ export default defineConfig({
     react(),
     viteCommonjs(),
     topLevelAwait(),
-    tailwindcss(),
   ],
   resolve: {
     alias: {

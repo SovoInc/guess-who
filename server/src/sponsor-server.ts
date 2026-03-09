@@ -20,6 +20,8 @@ import { fromHex } from '@midnight-ntwrk/midnight-js-utils';
 import type { WalletContext } from './api.js';
 import { signTransactionIntents } from './api.js';
 import { type Logger } from 'pino';
+import { createSession, answerQuestion, evaluateGuess } from '../../lib/gameManager.js';
+import { upsertScore, getLeaderboard } from '../../lib/scores.js';
 
 let logger: Logger;
 
@@ -79,6 +81,63 @@ export function startSponsorServer(ctx: WalletContext, port = 3001): void {
       const message = err instanceof Error ? err.message : String(err);
       logger.error(`Sponsor server error: ${message}`);
       res.status(500).json({ error: message });
+    }
+  });
+
+  // ── Game API routes ──
+
+  app.post('/api/session/start', async (_req, res) => {
+    try {
+      const result = await createSession();
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(`Session start error: ${message}`);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/question', async (req, res) => {
+    try {
+      const { sessionId, category, value } = req.body as { sessionId: string; category: string; value: string };
+      const answer = await answerQuestion(sessionId, category, value);
+      if (answer === null) return res.status(404).json({ error: 'Session not found' });
+      res.json({ answer });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.post('/api/declare', async (req, res) => {
+    try {
+      const { sessionId, guessId, shieldedAddress } = req.body as { sessionId: string; guessId: number; shieldedAddress: string };
+      const result = await evaluateGuess(sessionId, guessId);
+      if (result === null) return res.status(404).json({ error: 'Session not found' });
+      if (result.correct && shieldedAddress) {
+        await upsertScore(shieldedAddress, 100).catch(() => {});
+      }
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get('/api/scores', async (_req, res) => {
+    try {
+      const leaderboard = await getLeaderboard();
+      res.json({ leaderboard });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.post('/api/scores', async (req, res) => {
+    try {
+      const { shieldedAddress, score } = req.body as { shieldedAddress: string; score: number };
+      await upsertScore(shieldedAddress, score);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
