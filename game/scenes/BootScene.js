@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { COLORS, GAME_WIDTH, GAME_HEIGHT } from '../constants.js';
 import { applyCRTOverlay } from '../utils/crt.js';
 import { SoundSynth } from '../audio/SoundSynth.js';
+import { clearAddress } from '../wallet.js';
 
 const BOOT_LINES = [
   'GHOST CYPHER OS v2.7.1',
@@ -20,6 +21,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    clearAddress();
     this.sound = new SoundSynth();
     this.registry.set('sound', this.sound);
 

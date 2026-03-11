@@ -12,7 +12,7 @@ export function createGame(parent) {
     height: GAME_HEIGHT,
     backgroundColor: '#000000',
     parent,
-    scene: [BootScene, MenuScene, GameScene, ResultScene],
+    scene: [MenuScene, GameScene, ResultScene],
     audio: {
       disableWebAudio: false,
     },

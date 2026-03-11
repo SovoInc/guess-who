@@ -1,12 +1,9 @@
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { fromHex, toHex, type SigningKey } from '@midnight-ntwrk/compact-runtime';
+import { toHex, type SigningKey } from '@midnight-ntwrk/compact-runtime';
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { Counter, witnesses } from '@midnight-ntwrk/counter-contract';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
-import { findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
-import { CompiledContract } from '@midnight-ntwrk/compact-js';
 import {
   ZKConfigProvider,
   type MidnightProvider,
@@ -59,7 +56,7 @@ function inMemoryPrivateStateProvider<PSI extends PrivateStateId, PS>(): Private
 
 // -- Wallet + Midnight providers from Lace --
 
-const SPONSOR_SERVER_URL = 'http://localhost:3001';
+const SPONSOR_SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 function buildWalletAndMidnightProvider(connected: ConnectedAPI, coinPublicKey: string, encPublicKey: string): WalletProvider & MidnightProvider {
   let provedTxHex = '';
@@ -70,45 +67,35 @@ function buildWalletAndMidnightProvider(connected: ConnectedAPI, coinPublicKey: 
     async balanceTx(tx: UnboundTransaction, _ttl?: Date): Promise<ledger.FinalizedTransaction> {
       const bytes = tx.serialize();
       provedTxHex = toHex(bytes);
-      console.log('[sponsor] proved tx captured, hex length:', provedTxHex.length);
       return {
         serialize: () => bytes,
         identifiers: () => tx.identifiers(),
       } as unknown as ledger.FinalizedTransaction;
     },
     submitTx: async (_tx: ledger.FinalizedTransaction): Promise<ledger.TransactionId> => {
-      console.log('[sponsor] POSTing proved tx to sponsor server');
-      let res: Response;
-      try {
-        res = await fetch(`${SPONSOR_SERVER_URL}/sponsor`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tx: provedTxHex }),
-        });
-      } catch (fetchErr) {
-        console.error('[sponsor] fetch failed:', fetchErr);
-        throw fetchErr;
-      }
+      const res = await fetch(`${SPONSOR_SERVER_URL}/sponsor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tx: provedTxHex }),
+      });
       if (!res.ok) {
         const body = await res.json() as { error: string };
         throw new Error(`Sponsor server error: ${body.error}`);
       }
       const { txId } = await res.json() as { txId: string };
-      console.log('[sponsor] txId:', txId);
       return txId as unknown as ledger.TransactionId;
     },
   };
 }
 
-// -- Public API --
+// -- Provider builder --
 
 export async function buildProviders(connected: ConnectedAPI) {
   const config = await connected.getConfiguration();
-  console.log('wallet config:', config);
   setNetworkId(config.networkId);
 
   const addresses = await connected.getShieldedAddresses();
-  const zkConfigProvider = new FetchZkConfigProvider(`${window.location.origin}/managed/counter`);
+  const zkConfigProvider = new FetchZkConfigProvider(`${window.location.origin}/managed/guess_who`);
   const proofProvider = httpClientProofProvider(config.proverServerUri ?? '', zkConfigProvider);
   const walletAndMidnightProvider = buildWalletAndMidnightProvider(connected, addresses.shieldedCoinPublicKey, addresses.shieldedEncryptionPublicKey);
 
@@ -121,35 +108,4 @@ export async function buildProviders(connected: ConnectedAPI) {
     privateStateProvider: inMemoryPrivateStateProvider<string, any>(),
     config,
   };
-}
-
-export async function joinCounter(connected: ConnectedAPI, contractAddress: string) {
-  const providers = await buildProviders(connected);
-
-  const compiledContract = CompiledContract.make('counter', Counter.Contract).pipe(
-    CompiledContract.withWitnesses(witnesses),
-  );
-
-  const counterContract = await findDeployedContract(providers, {
-    contractAddress,
-    compiledContract,
-    privateStateId: 'counterPrivateState',
-    initialPrivateState: { privateCounter: 0 },
-  });
-
-  return { counterContract, providers };
-}
-
-export async function increment(counterContract: Awaited<ReturnType<typeof joinCounter>>['counterContract']) {
-  const result = await counterContract.callTx.increment();
-  return result.public;
-}
-
-export async function getCounterValue(
-  providers: Awaited<ReturnType<typeof buildProviders>>,
-  contractAddress: string,
-): Promise<bigint | null> {
-  const state = await providers.publicDataProvider.queryContractState(contractAddress);
-  if (!state) return null;
-  return Counter.ledger(state.data).round;
 }

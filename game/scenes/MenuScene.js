@@ -3,6 +3,7 @@ import { COLORS, GAME_WIDTH, GAME_HEIGHT } from '../constants.js';
 import { applyCRTOverlay, addFlickerTween } from '../utils/crt.js';
 import { startSession, getScores } from '../api.js';
 import { getAddress, connectLace } from '../wallet.js';
+import { SoundSynth } from '../audio/SoundSynth.js';
 
 const MENU_ITEMS = ['START MISSION', 'HIGH SCORES', 'ABOUT', 'ABORT'];
 
@@ -16,6 +17,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    if (!this.registry.get('sound')) {
+      this.registry.set('sound', new SoundSynth());
+    }
     this.sound = this.registry.get('sound');
     this.cameras.main.fadeIn(400, 0, 0, 0);
 
@@ -49,8 +53,8 @@ export class MenuScene extends Phaser.Scene {
     // ── Top-right wallet connect button ──
     this._buildWalletButton();
 
-    // If address is in session but contract not in memory (e.g. after page refresh), auto-reconnect
-    if (getAddress() && !window.__midnightContract) {
+    // If address is in session but wallet not in memory (e.g. after page refresh), auto-reconnect
+    if (getAddress() && !window.__midnightConnectedApi) {
       this._connectWallet();
     }
 
@@ -177,10 +181,10 @@ export class MenuScene extends Phaser.Scene {
     this._showMessage('INITIATING MISSION...', '#00ff41');
 
     try {
-      const { sessionId, characters } = await startSession();
+      const { sessionId, characters, contractAddress, gameId } = await startSession();
       this.cameras.main.fadeOut(400, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.scene.start('GameScene', { sessionId, walletAddress: addr, characters });
+        this.scene.start('GameScene', { sessionId, walletAddress: addr, characters, contractAddress: contractAddress || null, gameId: gameId || null });
       });
     } catch (err) {
       const msg = err?.message || String(err);
@@ -222,6 +226,7 @@ export class MenuScene extends Phaser.Scene {
       this.selectedIndex = 0;
       this._updateSelection();
     } catch (e) {
+      console.error('[connectWallet] error:', e);
       const msg = String(e.message || e).slice(0, 40);
       if (this._walletBtn) {
         this._walletBtn.setText('[ CONNECT WALLET ]').setColor('#ff4444');
@@ -241,7 +246,7 @@ export class MenuScene extends Phaser.Scene {
     try {
       const { leaderboard } = await getScores();
       this._openOverlay('HIGH SCORES', (panel, startY) => {
-        this.add.text(panel.x + 16, startY, 'RANK  AGENT              SCORE', {
+        this.add.text(panel.x + 16, startY, 'RANK  AGENT          SCORE   Q   TIME', {
           fontFamily: "'Press Start 2P', monospace",
           fontSize: '6px',
           color: '#00aa22',
@@ -257,7 +262,9 @@ export class MenuScene extends Phaser.Scene {
           leaderboard.slice(0, 10).forEach((entry, i) => {
             const a = entry.shielded_address || 'UNKNOWN';
             const truncAddr = a.length > 14 ? a.slice(0, 6) + '..' + a.slice(-6) : a;
-            const row = `#${String(i + 1).padStart(2, '0')}  ${truncAddr.padEnd(16)}  ${String(entry.best_score).padStart(5)}`;
+            const mins = Math.floor((entry.time_elapsed || 0) / 60);
+            const secs = String((entry.time_elapsed || 0) % 60).padStart(2, '0');
+            const row = `#${String(i + 1).padStart(2, '0')}  ${truncAddr.padEnd(14)}  ${String(entry.score).padStart(5)}  ${String(entry.questions_used).padStart(2)}  ${mins}:${secs}`;
             this.add.text(panel.x + 16, startY + 20 + i * 22, row, {
               fontFamily: "'Press Start 2P', monospace",
               fontSize: '6px',
