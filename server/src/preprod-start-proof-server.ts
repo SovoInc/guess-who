@@ -1,28 +1,32 @@
-// This file is part of midnightntwrk/example-counter.
-// Copyright (C) 2025 Midnight Foundation
-// SPDX-License-Identifier: Apache-2.0
-// Licensed under the Apache License, Version 2.0 (the "License");
-// You may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+import { config as dotenv } from 'dotenv';
+import { resolve } from 'node:path';
+dotenv({ path: resolve(new URL(import.meta.url).pathname, '..', '..', '..', '.env') });
 
 import { createLogger } from './logger-utils.js';
-import { run } from './cli.js';
 import { currentDir, PreprodConfig } from './config.js';
+import { startSponsorServer, setSponsorLogger } from './sponsor-server.js';
+import { buildWalletAndWaitForFunds, withStatus, setLogger } from './api.js';
 import { DockerComposeEnvironment, Wait } from 'testcontainers';
 import path from 'node:path';
 
+const seed = process.env.WALLET_SEED;
+if (!seed) throw new Error('WALLET_SEED environment variable is required for preprod');
+
 const config = new PreprodConfig();
+const logger = await createLogger(config.logDir);
+setLogger(logger);
+setSponsorLogger(logger);
+
+logger.info('Starting proof server...');
 const dockerEnv = new DockerComposeEnvironment(path.resolve(currentDir, '..'), 'proof-server.yml').withWaitStrategy(
   'proof-server',
   Wait.forLogMessage('Actix runtime found; starting in Actix runtime', 1),
 );
-const logger = await createLogger(config.logDir);
-await run(config, logger, dockerEnv);
+await dockerEnv.up();
+logger.info('Proof server ready');
+
+const walletCtx = await withStatus('Building wallet and waiting for funds', () =>
+  buildWalletAndWaitForFunds(config, seed),
+);
+
+await startSponsorServer(walletCtx, config);

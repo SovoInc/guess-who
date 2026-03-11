@@ -1,38 +1,78 @@
 // This file is part of midnightntwrk/example-counter.
 // Copyright (C) 2025 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
-// Licensed under the Apache License, Version 2.0 (the "License");
-// You may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 import express from 'express';
 import cors from 'cors';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { fromHex } from '@midnight-ntwrk/midnight-js-utils';
 import type { WalletContext } from './api.js';
-import { signTransactionIntents } from './api.js';
+import { signTransactionIntents, configureProviders, configureGuessWhoProviders, deployGuessWho, createOnChainGame, submitGuessOnChain, getDustBalance } from './api.js';
 import { type Logger } from 'pino';
 import { createSession, answerQuestion, evaluateGuess } from '../../lib/gameManager.js';
-import { upsertScore, getLeaderboard } from '../../lib/scores.js';
+import { recordGameScore, getLeaderboard } from '../../lib/scores.js';
+import { claimPoolEntry } from '../../lib/gamePool.js';
+import { runPoolRefill } from './poolWorker.js';
 
 let logger: Logger;
+let walletCtxGlobal: WalletContext | null = null;
+let providersGlobal: any = null;
+let guessWhoProvidersGlobal: any = null;
+let configGlobal: import('./config.js').Config | null = null;
+let sharedContractAddress: string | null = null;
+
+// In-memory map from sessionId -> on-chain game_id (bigint)
+const sessionGameIds = new Map<string, bigint>();
+
+// Serialize on-chain calls to avoid LevelDB lock contention
+let onChainQueue: Promise<void> = Promise.resolve();
+function enqueueOnChain<T>(fn: () => Promise<T>): Promise<T> {
+  const next = onChainQueue.then(() => fn());
+  onChainQueue = next.then(() => {}, () => {});
+  return next;
+}
 
 export function setSponsorLogger(_logger: Logger): void {
   logger = _logger;
 }
 
-export function startSponsorServer(ctx: WalletContext, port = 3001): void {
+export async function startSponsorServer(ctx: WalletContext, config: import('./config.js').Config, port = 3001): Promise<void> {
+  walletCtxGlobal = ctx;
+  configGlobal = config;
+
+  logger.info('Initializing GuessWho providers...');
+  guessWhoProvidersGlobal = await configureGuessWhoProviders(ctx, config);
+  logger.info('GuessWho providers ready');
+
+  // Deploy or join the shared contract
+  // (pool refill started after contract address is known, below)
+  const existingAddress = process.env.GUESS_WHO_CONTRACT_ADDRESS;
+  if (existingAddress) {
+    sharedContractAddress = existingAddress;
+    logger.info(`Using existing GuessWho contract: ${sharedContractAddress}`);
+  } else {
+    logger.info('Deploying shared GuessWho contract...');
+    const { contractAddress } = await deployGuessWho(guessWhoProvidersGlobal);
+    sharedContractAddress = contractAddress;
+    logger.info(`
+──────────────────────────────────────────────────────────────
+  GUESS WHO CONTRACT DEPLOYED
+  Address: ${sharedContractAddress}
+  Add to .env: GUESS_WHO_CONTRACT_ADDRESS=${sharedContractAddress}
+──────────────────────────────────────────────────────────────
+`);
+  }
+
+  // Start background pool refill (fire and forget)
+  runPoolRefill(guessWhoProvidersGlobal, sharedContractAddress!, logger, walletCtxGlobal!).catch(err => {
+    logger.error({ err }, 'Pool refill loop crashed');
+  });
+
   const app = express();
   app.use(cors());
   app.use(express.json());
+
+  // ── Transaction sponsorship ──
 
   app.post('/sponsor', async (req, res) => {
     logger.info('Sponsor server: received prove tx from web app');
@@ -40,7 +80,6 @@ export function startSponsorServer(ctx: WalletContext, port = 3001): void {
       const { tx: txHex } = req.body as { tx: string };
       logger.info(`Sponsor server: deserializing tx (hex length: ${txHex.length})`);
 
-      // Deserialize the proved UnboundTransaction from the web app
       const tx = ledger.Transaction.deserialize<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>(
         'signature',
         'proof',
@@ -49,7 +88,6 @@ export function startSponsorServer(ctx: WalletContext, port = 3001): void {
       );
 
       logger.info('Sponsor server: balancing transaction with DUST...');
-      // Balance with DUST only (genesis wallet pays fees)
       const recipe = await ctx.wallet.balanceUnboundTransaction(
         tx,
         { shieldedSecretKeys: ctx.shieldedSecretKeys, dustSecretKey: ctx.dustSecretKey },
@@ -60,7 +98,6 @@ export function startSponsorServer(ctx: WalletContext, port = 3001): void {
       );
 
       logger.info('Sponsor server: signing transaction intents...');
-      // Sign intents using the correct proof markers (works around SDK bug)
       const signFn = (payload: Uint8Array) => ctx.unshieldedKeystore.signData(payload);
       signTransactionIntents(recipe.baseTransaction, signFn, 'proof');
       if (recipe.balancingTransaction) {
@@ -68,11 +105,9 @@ export function startSponsorServer(ctx: WalletContext, port = 3001): void {
       }
 
       logger.info('Sponsor server: finalizing recipe...');
-      // Finalize (bind + merge dust balancing tx)
       const finalized = await ctx.wallet.finalizeRecipe(recipe);
 
       logger.info('Sponsor server: submitting transaction to node...');
-      // Submit via node
       const txId = await ctx.wallet.submitTransaction(finalized);
 
       logger.info(`Sponsor server: transaction submitted successfully. txId: ${txId}`);
@@ -86,14 +121,72 @@ export function startSponsorServer(ctx: WalletContext, port = 3001): void {
 
   // ── Game API routes ──
 
+  /**
+   * Start a new game session.
+   * Creates an on-chain game entry in the shared contract with a committed spy.
+   * Returns session data + contractAddress + gameId.
+   */
   app.post('/api/session/start', async (_req, res) => {
     try {
-      const result = await createSession();
-      logger.info(`Session created: ${result.sessionId}`);
-      res.json(result);
+      let contractAddress: string | null = sharedContractAddress;
+      let gameId: string | null = null;
+      let spyIdOverride: number | undefined;
+      let saltOverride: string | undefined;
+
+      if (sharedContractAddress) {
+        // Try to claim a pre-generated game from the pool
+        const poolEntry = await claimPoolEntry();
+        if (poolEntry) {
+          spyIdOverride = poolEntry.culpritId;
+          saltOverride = poolEntry.salt;
+          gameId = poolEntry.gameId.toString();
+          contractAddress = poolEntry.contractAddress;
+          logger.info(`Pool entry claimed: game_id=${gameId}, culpritId=${spyIdOverride}`);
+        } else {
+          // Pool empty — generate on demand (slow path)
+          logger.warn('Pool empty, generating on demand');
+          try {
+            const tempSession = await createSession();
+            const privateState = {
+              culpritId: tempSession.spyId,
+              salt: hexToBytes(tempSession.salt),
+            };
+            const onChain = await enqueueOnChain(() => createOnChainGame(guessWhoProvidersGlobal, sharedContractAddress!, privateState));
+            gameId = onChain.gameId.toString();
+            sessionGameIds.set(tempSession.sessionId, onChain.gameId);
+            logger.info(`On-chain game created on demand: game_id=${gameId}`);
+            // Return the already-created session
+            res.json({
+              sessionId: tempSession.sessionId,
+              characters: tempSession.characters,
+              contractAddress,
+              gameId,
+            });
+            return;
+          } catch (onChainErr) {
+            const msg = onChainErr instanceof Error ? onChainErr.message : String(onChainErr);
+            logger.warn({ err: onChainErr }, `On-chain game creation skipped (${msg})`);
+            contractAddress = null;
+          }
+        }
+      }
+
+      const result = await createSession(spyIdOverride, saltOverride);
+      logger.info(`Session created: ${result.sessionId}, spyId: ${result.spyId}`);
+
+      if (gameId) {
+        sessionGameIds.set(result.sessionId, BigInt(gameId));
+      }
+
+      res.json({
+        sessionId: result.sessionId,
+        characters: result.characters,
+        contractAddress,
+        gameId,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error(`Session start error: ${message}`);
+      logger.error({ err }, `Session start error: ${message}`);
       res.status(500).json({ error: message });
     }
   });
@@ -109,15 +202,61 @@ export function startSponsorServer(ctx: WalletContext, port = 3001): void {
     }
   });
 
+  /**
+   * Declare the spy. Evaluates the guess off-chain and submits ZK proof on-chain.
+   */
   app.post('/api/declare', async (req, res) => {
     try {
-      const { sessionId, guessId, shieldedAddress } = req.body as { sessionId: string; guessId: number; shieldedAddress: string };
+      const { sessionId, guessId, shieldedAddress, contractAddress, gameId } = req.body as {
+        sessionId: string;
+        guessId: number;
+        shieldedAddress: string;
+        contractAddress?: string;
+        gameId?: string;
+      };
+
       const result = await evaluateGuess(sessionId, guessId);
       if (result === null) return res.status(404).json({ error: 'Session not found' });
-      if (result.correct && shieldedAddress) {
-        await upsertScore(shieldedAddress, 100).catch(() => {});
+
+      let onChain: { correct: boolean; txId: string } | null = null;
+      const onChainGameId = gameId != null ? BigInt(gameId) : sessionGameIds.get(sessionId);
+
+      if (contractAddress && onChainGameId != null && result.session) {
+        try {
+          const privateState = {
+            culpritId: result.session.spy_id,
+            salt: hexToBytes(result.session.salt),
+          };
+          onChain = await enqueueOnChain(() => submitGuessOnChain(guessWhoProvidersGlobal, contractAddress!, privateState, onChainGameId, Number(guessId)));
+          logger.info(`On-chain guess result: correct=${onChain.correct}, txId=${onChain.txId}`);
+        } catch (onChainErr) {
+          const msg = onChainErr instanceof Error ? onChainErr.message : String(onChainErr);
+          logger.warn(`On-chain guess skipped (${msg})`);
+        }
       }
-      res.json(result);
+
+      sessionGameIds.delete(sessionId);
+
+      res.json({
+        correct: result.correct,
+        spy: result.spy,
+        onChain,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get('/api/dust', async (_req, res) => {
+    try {
+      if (!walletCtxGlobal) return res.status(503).json({ error: 'Wallet not ready' });
+      const dust = await getDustBalance(walletCtxGlobal.wallet);
+      res.json({
+        available: dust.available.toString(),
+        pending: dust.pending.toString(),
+        availableCoins: dust.availableCoins,
+        pendingCoins: dust.pendingCoins,
+      });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -134,8 +273,15 @@ export function startSponsorServer(ctx: WalletContext, port = 3001): void {
 
   app.post('/api/scores', async (req, res) => {
     try {
-      const { shieldedAddress, score } = req.body as { shieldedAddress: string; score: number };
-      await upsertScore(shieldedAddress, score);
+      const { sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct } = req.body as {
+        sessionId: string;
+        shieldedAddress: string;
+        score: number;
+        questionsUsed: number;
+        timeElapsed: number;
+        correct: boolean;
+      };
+      await recordGameScore({ session_id: sessionId, shielded_address: shieldedAddress, score, questions_used: questionsUsed, time_elapsed: timeElapsed, correct });
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -145,4 +291,14 @@ export function startSponsorServer(ctx: WalletContext, port = 3001): void {
   app.listen(port, () => {
     logger.info(`Sponsor server listening on :${port}`);
   });
+}
+
+
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
 }

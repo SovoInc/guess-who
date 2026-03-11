@@ -1,0 +1,8 @@
+{
+  "version": 3,
+  "file": "index.js",
+  "sourceRoot": "../../../../",
+  "sources": ["src/guess_who.compact", "compiler/standard-library.compact"],
+  "names": [],
+  "mappings": ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;EAAA;;;;;;;;;;;;;;;;MA+BA,AAAA,WAcC;;;;;;;;;;;;;;;;;;;;;;OAAA;MAOD,AAAA,YAqBC;;;;;cArB2B,SAAiB;cAAE,UAAkB;;;;;;;;;;;;;;;;;;;;;;;;;yCAArC,SAAiB,+BAAE,UAAkB;;;;;;;;;8CAArC,SAAiB;8CAAE,UAAkB;;;OAqBhE;;;;;;GACA;EA1ED;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;IAkBA;;;;;;;;;yEAAoC;IACpC;;;;;;;;;;yEAAyC;;;;;;;GAuDxC;EC1BD,AAAA,kBAAiC;oEAAA;;;EDzBjC,AAAA,aAA+B;;0DAA/B,UAA+B;;;;;;;;;;;;;;GAAA;EAC/B,AAAA,OAA0B;;0DAA1B,IAA0B;;;;;;;;;;;;;;GAAA;EAO1B,AAAA,cAcC;UAbO,SAA6B,2BAAnB;;;;;;;;;;;mHAAY;UAC5B,KAAY;IAAZ;;;;;;;;;;6FAAA,KAAY;;;;wEAAA;UAEN,QAA0B;UAC1B,aAAoB;UACpB,YAAqG,qCAA5B,QAAM;wDAAQ,aAAW;UAExG,KAAK,iBACkB,YAAU;IADjC;;;;;;;;;;2HAAa,SAAO;;;2HAApB,KAAK;;;wEAAA;WAKW,SAAO;GACxB;EAOD,AAAA,eAqBC,4BArB2B,SAAiB,EAAE,UAAkB;UACzD,aAA+B,GAAR,SAAO;UAC9B,MAAgC,2BAAzB;;;;;;;;;;;;;;sIAAa,aAAW;;;gHAAnB;4BACV,MAAI;UAEN,QAA0B;UAC1B,aAAoB;UAEpB,UAAmG,qCAA5B,QAAM;sDAAQ,aAAW;0CAC9F,UAAQ,EAAI,MAAI;;UAElB,YAAyC,iBAAnB,QAAM,EAAI,UAAQ;QAE1C,YAAU;YACZ,KAAK,iBACS,MAAI;MADlB;;;;;;;;;;6HAAa,aAAW;;;6HAAxB,KAAK;;;0EAAA;;WAMA,YAAU;GAClB;;;;;;;;;;;;;;;;;;;;;;;;IAvDD;qCAAA;;;;;;;;;;;0GAAoC;KAAA;IACpC;;;;;uCAAA;;;;;;;;;;;;;;;;4GAAyC;;;;;;uCAAzC;;;;;;;;;;;;4GAAyC;;;;;;;;;;;;;;uCAAzC;;;;;;;;;;;;;;;4GAAyC;;;;;;;;;;;;;;uCAAzC;;;;;;;;;;;;;;;;;4GAAyC;;;;;;;;;KAAA;;;;;;;;;;;;"
+}

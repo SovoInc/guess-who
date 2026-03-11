@@ -35,17 +35,12 @@ export async function connectLace(onStatus = () => {}) {
   if (!walletEntry) throw new Error('Lace wallet (io.lace.wallet) not found.');
 
   onStatus('CONNECTING TO LACE...');
-  const connectedApi = await walletEntry.connect('undeployed');
+  const connectedApi = await walletEntry.connect('preprod');
 
   onStatus('FETCHING SHIELDED ADDRESS...');
   const addresses = await connectedApi.getShieldedAddresses();
   const shieldedAddress = addresses?.shieldedAddress || addresses?.[0] || 'UNKNOWN_AGENT';
 
-  onStatus('JOINING CONTRACT...');
-  const { joinCounter } = await import('../src/midnight.js');
-  const result = await joinCounter(connectedApi, CONTRACT_ADDRESS);
-
-  window.__midnightContract = result;
   window.__midnightConnectedApi = connectedApi;
   setAddress(shieldedAddress);
 

@@ -1,12 +1,16 @@
 import * as Phaser from 'phaser';
 import { COLORS, SIDEBAR_X, SIDEBAR_W } from '../constants.js';
 
-const LINE_GAP = 10;      // px gap between entries (after each entry's own height)
-const LINE_SPACING = 4;   // extra px between wrapped lines within an entry
+const LINE_GAP = 10;
+const LINE_SPACING = 4;
 const FONT_SIZE = '7px';
-const LOG_TOP_OFFSET = 42; // px below panel top where log starts
-const PROGRESS_BAR_H = 30; // reserved at bottom for progress bar
-const MAX_LOG_TEXTS = 30;  // pool size — more than enough visible entries
+const LOG_TOP_OFFSET = 52; // increased to make room for tabs
+const PROGRESS_BAR_H = 30;
+const MAX_LOG_TEXTS = 30;
+
+const TAB_LABELS = ['ALL', 'INTEL', 'DEBRIEF'];
+const TAB_COUNT = 3;
+const TAB_H = 12;
 
 export class NetworkWindow {
   constructor(scene, y, height, x, w) {
@@ -15,14 +19,20 @@ export class NetworkWindow {
     this.y = y;
     this.w = w !== undefined ? w : SIDEBAR_W;
     this.h = height;
-    this.logLines = [];
+    // Tab 0 = ALL, Tab 1 = player questions/cpu answers, Tab 2 = cpu questions/player answers
+    this.tabLogs = [[], [], []];
+    this.activeTab = 0;
     this.proofTimers = [];
-    this._scrollOffset = 0; // 0 = pinned to bottom
+    this._scrollOffsets = [0, 0, 0];
 
     this._logAreaH = height - LOG_TOP_OFFSET - PROGRESS_BAR_H;
 
     this._build();
   }
+
+  get logLines() { return this.tabLogs[this.activeTab]; }
+  get _scrollOffset() { return this._scrollOffsets[this.activeTab]; }
+  set _scrollOffset(v) { this._scrollOffsets[this.activeTab] = v; }
 
   _build() {
     const { scene, x, y, w, h } = this;
@@ -48,18 +58,36 @@ export class NetworkWindow {
     });
 
     // Title bar
-    this.titleText = scene.add.text(x + 8, y + 6, '[ GHOST CYPHER ]', {
+    this.titleText = scene.add.text(x + 8, y + 6, '[ NETWORK COMMS ]', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '9px',
       color: '#00ff41',
     });
 
-    // Status
-    this.statusText = scene.add.text(x + 8, y + 22, 'STATUS: CONNECTED', {
-      fontFamily: "'Press Start 2P', monospace",
-      fontSize: '7px',
-      color: '#00aa22',
-    });
+    // Tabs
+    const tabW = Math.floor(w / TAB_COUNT);
+    this.tabGfx = scene.add.graphics();
+    this.tabTexts = [];
+    this.tabHitZones = [];
+    for (let i = 0; i < TAB_COUNT; i++) {
+      const tx = x + i * tabW;
+      const ty = y + 20;
+      const t = scene.add.text(tx + 4, ty + 2, TAB_LABELS[i], {
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: '6px',
+        color: i === 0 ? '#00ff41' : '#007722',
+      });
+      this.tabTexts.push(t);
+
+      const hit = scene.add.rectangle(tx + tabW / 2, ty + TAB_H / 2, tabW, TAB_H, 0, 0)
+        .setInteractive()
+        .setDepth(10);
+      hit.on('pointerdown', () => this._switchTab(i));
+      hit.on('pointerover', () => { if (i !== this.activeTab) t.setColor('#00ff41'); });
+      hit.on('pointerout',  () => { if (i !== this.activeTab) t.setColor('#007722'); });
+      this.tabHitZones.push(hit);
+    }
+    this._drawTabs();
 
     // Pool of text objects for log rendering
     this.logTexts = [];
@@ -96,27 +124,66 @@ export class NetworkWindow {
       color: '#00ff41',
     });
 
-    // Mouse wheel scrolling
-    const hitZone = scene.add.rectangle(x + w / 2, y + h / 2, w, h, 0, 0)
-      .setInteractive();
+    // Mouse wheel scrolling — accumulate delta, step every 80px
+    this._wheelAccum = 0;
+    const WHEEL_STEP = 80;
+    const hitZone = scene.add.rectangle(x + w / 2, y + h / 2, w, h, 0, 0).setInteractive();
     hitZone.on('wheel', (_ptr, _dx, dy) => {
-      this._scrollOffset = Phaser.Math.Clamp(
-        this._scrollOffset + Math.sign(dy),
-        0,
-        this.logLines.length
-      );
-      this._refresh();
+      this._wheelAccum += dy;
+      const steps = Math.trunc(this._wheelAccum / WHEEL_STEP);
+      if (steps !== 0) {
+        this._wheelAccum -= steps * WHEEL_STEP;
+        this._scrollOffsets[this.activeTab] = Phaser.Math.Clamp(
+          this._scrollOffsets[this.activeTab] + steps,
+          0,
+          this.tabLogs[this.activeTab].length
+        );
+        this._refresh();
+      }
     });
     this._hitZone = hitZone;
   }
 
-  log(message, color = '#00aa22') {
-    this.logLines.push({ message, color });
-    this._scrollOffset = 0; // pin to bottom
+  _drawTabs() {
+    const { x, y, w } = this;
+    const tabW = Math.floor(w / TAB_COUNT);
+    const gfx = this.tabGfx;
+    gfx.clear();
+    for (let i = 0; i < TAB_COUNT; i++) {
+      const tx = x + i * tabW;
+      const ty = y + 20;
+      const active = i === this.activeTab;
+      gfx.fillStyle(active ? COLORS.BORDER : COLORS.PANEL_BG, 1);
+      gfx.fillRect(tx, ty, tabW, TAB_H);
+      gfx.lineStyle(1, active ? COLORS.PRIMARY : COLORS.DIM, 1);
+      gfx.strokeRect(tx, ty, tabW, TAB_H);
+      this.tabTexts[i].setColor(active ? '#00ff41' : '#007722');
+    }
+  }
+
+  _switchTab(i) {
+    this.activeTab = i;
+    this._drawTabs();
     this._refresh();
   }
 
-  // Measure how tall a given message renders (in px) using a temp off-screen text
+  // Log to a specific tab (and also to tab 0 ALL)
+  logTab(tabIndex, message, color = '#00aa22') {
+    if (tabIndex !== 0) {
+      this.tabLogs[0].push({ message, color });
+    }
+    this.tabLogs[tabIndex].push({ message, color });
+    if (this.activeTab === 0 || this.activeTab === tabIndex) {
+      this._scrollOffsets[this.activeTab] = 0;
+      this._refresh();
+    }
+  }
+
+  // Convenience: log to ALL tab only (system messages, non-question events)
+  log(message, color = '#00aa22') {
+    this.logTab(0, message, color);
+  }
+
   _measureHeight(message) {
     if (!this._measureText) {
       this._measureText = this.scene.add.text(-9999, -9999, '', {
@@ -131,47 +198,36 @@ export class NetworkWindow {
   }
 
   _refresh() {
-    const { x, y, w } = this;
-    const logAreaBottom = y + LOG_TOP_OFFSET + this._logAreaH;
-    const total = this.logLines.length;
+    const { x, y } = this;
+    const lines = this.tabLogs[this.activeTab];
+    const total = lines.length;
 
-    // Hide all pooled texts first
     this.logTexts.forEach(t => { t.setText(''); t.setVisible(false); });
 
     if (total === 0) { this._drawScrollBar(0); return; }
 
-    // Build heights array for all lines (cached on the logLine object)
-    for (const line of this.logLines) {
+    for (const line of lines) {
       if (line.height === undefined) {
         line.height = this._measureHeight(line.message);
       }
     }
 
-    // Determine visible window from the bottom, working backwards
-    // _scrollOffset=0 → show latest; each increment scrolls up by one entry
-    const anchorIdx = Math.max(0, total - 1 - this._scrollOffset);
+    const scrollOffset = this._scrollOffsets[this.activeTab];
+    const anchorIdx = Math.max(0, total - 1 - scrollOffset);
 
-    // Collect entries that fit in logAreaH, starting from anchorIdx going up
     const visible = [];
     let usedH = 0;
     for (let i = anchorIdx; i >= 0; i--) {
-      const entryH = this.logLines[i].height + LINE_GAP;
-      if (usedH + this.logLines[i].height > this._logAreaH && visible.length > 0) break;
+      const entryH = lines[i].height + LINE_GAP;
+      if (usedH + lines[i].height > this._logAreaH && visible.length > 0) break;
       visible.unshift(i);
       usedH += entryH;
     }
 
-    // Position entries bottom-up from logAreaBottom
-    let curY = logAreaBottom;
-    // First pass: measure total height of visible entries
-    let totalVisH = 0;
-    for (const idx of visible) totalVisH += this.logLines[idx].height + LINE_GAP;
-    // Start from top of log area
-    curY = y + LOG_TOP_OFFSET;
-
+    let curY = y + LOG_TOP_OFFSET;
     visible.forEach((lineIdx, slot) => {
       if (slot >= this.logTexts.length) return;
-      const line = this.logLines[lineIdx];
+      const line = lines[lineIdx];
       const t = this.logTexts[slot];
       t.setPosition(x + 8, curY);
       t.setText('> ' + line.message);
@@ -184,7 +240,7 @@ export class NetworkWindow {
   }
 
   _drawScrollBar(total) {
-    const { x, y, w, h } = this;
+    const { x, y, w } = this;
     const gfx = this.scrollBarGfx;
     gfx.clear();
 
@@ -194,16 +250,15 @@ export class NetworkWindow {
     const trackY = y + LOG_TOP_OFFSET;
     const trackH = this._logAreaH;
 
-    // Track
     gfx.fillStyle(COLORS.PANEL_BG, 1);
     gfx.fillRect(trackX, trackY, 3, trackH);
     gfx.lineStyle(1, COLORS.DIM, 0.5);
     gfx.strokeRect(trackX, trackY, 3, trackH);
 
-    // Thumb — scrollOffset=0 = bottom, higher = older
+    const scrollOffset = this._scrollOffsets[this.activeTab];
     const maxScroll = Math.max(1, total - 1);
     const thumbH = Math.max(6, Math.floor(trackH / Math.max(total, 1) * 3));
-    const thumbY = trackY + Math.floor((trackH - thumbH) * (1 - this._scrollOffset / maxScroll));
+    const thumbY = trackY + Math.floor((trackH - thumbH) * (1 - scrollOffset / maxScroll));
     gfx.fillStyle(COLORS.BORDER, 1);
     gfx.fillRect(trackX, thumbY, 3, thumbH);
   }
@@ -286,7 +341,7 @@ export class NetworkWindow {
   }
 
   clear() {
-    this.logLines = [];
+    this.tabLogs = [[], [], []];
     this._refresh();
     this.clearProgress();
   }
@@ -294,8 +349,10 @@ export class NetworkWindow {
   destroy() {
     this.proofTimers.forEach(t => t.remove());
     this.panelGfx.destroy();
+    this.tabGfx.destroy();
     this.titleText.destroy();
-    this.statusText.destroy();
+    this.tabTexts.forEach(t => t.destroy());
+    this.tabHitZones.forEach(h => h.destroy());
     this.logTexts.forEach(t => t.destroy());
     if (this._measureText) this._measureText.destroy();
     this.progressBg.destroy();

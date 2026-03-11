@@ -21,7 +21,6 @@ const MINI_H = 56;
 const MINI_GAP = 4;
 
 // CPU timer (separate from player)
-const CPU_TIMER_SECONDS = TIMER_SECONDS;
 
 // Lie penalty in seconds
 const LIE_PENALTY = 10;
@@ -35,6 +34,8 @@ export class GameScene extends Phaser.Scene {
     this.sessionId = data.sessionId;
     this.walletAddress = data.walletAddress;
     this.characters = data.characters || CHARACTERS;
+    this.gameContractAddress = data.contractAddress || null;
+    this.gameId = data.gameId || null;
     this.state = {
       eliminated: new Set(),
       questions: [],
@@ -53,7 +54,7 @@ export class GameScene extends Phaser.Scene {
       eliminated: new Set(),
       remaining: new Set(this.characters.map(c => c.id)),
       questionsLeft: MAX_QUESTIONS,
-      timeSeconds: CPU_TIMER_SECONDS,
+      timeSeconds: 0,
       done: false,
     };
 
@@ -92,7 +93,17 @@ export class GameScene extends Phaser.Scene {
     );
 
     this._startTimer();
-    this._startCpuTimer();
+
+    // ESC → pause menu
+    this._paused = false;
+    this._pauseObjects = [];
+    // Combo tracking: set of card ids the player should eliminate after last intel
+    this._pendingEliminations = new Set();
+    this._comboScore = 0;
+    this.input.keyboard.on('keydown-ESC', () => {
+      if (this.state.gameOver) return;
+      this._paused ? this._hidePauseMenu() : this._showPauseMenu();
+    });
 
     // Announce who goes first
     const firstMsg = this.currentTurn === 'player'
@@ -228,13 +239,13 @@ export class GameScene extends Phaser.Scene {
     this.timerText.setColor(s.timeSeconds < 30 ? '#ff4444' : '#00ff41');
     this.questionsText.setText(`Q: ${s.questionsLeft}`);
     this.questionsText.setColor(s.questionsLeft <= 2 ? '#ffaa00' : '#39ff14');
-    this.scoreText.setText(`SCORE: ${this._calcScore(false)}`);
+    this.scoreText.setText(`SCORE: ${this._comboScore ?? 0}`);
   }
 
   _calcScore(correct) {
     if (!correct) return 0;
-    const s = this.state;
-    return (s.questionsLeft * 50) + (s.timeSeconds * 2) + 500;
+    // Combo points earned during play + time bonus for correct guess
+    return this._comboScore + this.state.timeSeconds * 10;
   }
 
   // ── Player Card Grid ─────────────────────────────────────────────────
@@ -266,7 +277,27 @@ export class GameScene extends Phaser.Scene {
       s.eliminated.add(character.id);
       this.cards[character.id].eliminate();
       if (this.sound) this.sound.eliminate();
-      this.networkWindow.log(`ELIMINATED: ${character.codename}`, '#00aa22');
+
+      if (this._pendingEliminations.has(character.id)) {
+        // This card was part of the current intel — award combo points
+        this._pendingEliminations.delete(character.id);
+        this._pendingActedOn++;
+        const total = this._pendingEliminationCount;
+        const acted = this._pendingActedOn;
+        // Full combo: all cards from this intel acted on = 200×N, partial = 100 each
+        const isFullCombo = acted === total && total > 1;
+        const pts = isFullCombo ? 200 * total : 100;
+        this._comboScore += pts;
+        const label = isFullCombo
+          ? `COMBO ×${total}! +${pts}`
+          : `INTEL USED +${pts}`;
+        this.networkWindow.log(`⚡ ${label}`, isFullCombo ? '#ffff00' : '#00ff41');
+      } else {
+        // Wild guess — no points, warn
+        this.networkWindow.log(`ELIMINATED: ${character.codename} [NO INTEL]`, '#888888');
+      }
+
+      this._updateHUD();
     }
   }
 
@@ -373,13 +404,6 @@ export class GameScene extends Phaser.Scene {
       fontSize: '9px',
       color: '#ff4444',
     });
-
-    // CPU timer display (inside board)
-    this.cpuTimerText = this.add.text(bx + boardW - 8, by + 6, 'CPU: 3:00', {
-      fontFamily: "'Press Start 2P', monospace",
-      fontSize: '9px',
-      color: '#ff4444',
-    }).setOrigin(1, 0);
 
     this.cpuMiniCards = [];
 
@@ -1027,42 +1051,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  _startCpuTimer() {
-    this.cpuTimerEvent = this.time.addEvent({
-      delay: 1000,
-      callback: () => {
-        if (this.state.gameOver || this.cpu.done) return;
-        this.cpu.timeSeconds--;
-        this._updateCpuTimerHUD();
-        if (this.cpu.timeSeconds <= 0) {
-          this.cpu.timeSeconds = 0;
-          this._cpuTimeUp();
-        }
-      },
-      loop: true,
-    });
-  }
-
-  _updateCpuTimerHUD() {
-    if (!this.cpuTimerText) return;
-    const t = this.cpu.timeSeconds;
-    const mins = Math.floor(t / 60);
-    const secs = String(t % 60).padStart(2, '0');
-    this.cpuTimerText.setText(`CPU: ${mins}:${secs}`);
-    this.cpuTimerText.setColor(t < 30 ? '#ff0000' : '#ff4444');
-  }
-
-  _cpuTimeUp() {
-    if (this.cpu.done || this.state.gameOver) return;
-    this.cpu.done = true;
-    this.networkWindow.log('CPU TIMER EXPIRED — ENEMY NEUTRALIZED', '#00ff41');
-    this.cpuStatusText.setText('CPU: NEUTRALIZED');
-    // If it expired during CPU's turn, hand control back to player
-    if (this.currentTurn === 'cpu') {
-      this.time.delayedCall(800, () => this._endCpuTurn());
-    }
-  }
-
   _timeUp() {
     this.state.gameOver = true;
     this.questionPanel.setDisabled(true);
@@ -1085,18 +1073,6 @@ export class GameScene extends Phaser.Scene {
     this.networkWindow.log(`⚠ YOU: LIE DETECTED — -${seconds}s`, '#ff4444');
   }
 
-  _penalizeCpuTime(seconds) {
-    this.cpu.timeSeconds = Math.max(0, this.cpu.timeSeconds - seconds);
-    this._updateCpuTimerHUD();
-    if (this.cpuTimerText) {
-      this.cpuTimerText.setColor('#ff0000');
-      this.time.delayedCall(800, () => {
-        if (this.cpuTimerText) this._updateCpuTimerHUD();
-      });
-    }
-    this.networkWindow.log(`⚠ CPU: DECEPTION COST — -${seconds}s`, '#ff6600');
-  }
-
   // ── Player Questions ─────────────────────────────────────────────────
 
   _onQuestion(category, value) {
@@ -1108,6 +1084,10 @@ export class GameScene extends Phaser.Scene {
     s.questionsLeft--;
     this._updateHUD();
     this.questionPanel.setDisabled(true);
+    // Reset pending intel when a new question is asked
+    this._pendingEliminations = new Set();
+    this._pendingEliminationCount = 0;
+    this._pendingActedOn = 0;
 
     // Phase 1: player avatar + type out question; fetch answer in parallel
     this._switchDialogToPlayer();
@@ -1135,8 +1115,8 @@ export class GameScene extends Phaser.Scene {
       const answerBool = answer === 'YES';
       const color = answerBool ? '#00ff41' : '#ff4444';
 
-      this.networkWindow.log(`YOU: ${sentence}`, '#00cc33');
-      this.networkWindow.log(`INTEL: ${answerBool ? 'CONFIRMED.' : 'NEGATIVE.'}`, color);
+      this.networkWindow.logTab(1, `YOU: ${sentence}`, '#00cc33');
+      this.networkWindow.logTab(1, `CPU: ${answerBool ? 'YES ✓' : 'NO ✓'}`, color);
       if (this.sound) answerBool ? this.sound.beepHigh() : this.sound.beepLow();
 
       // Static flicker → switch to enemy avatar → type answer
@@ -1147,9 +1127,17 @@ export class GameScene extends Phaser.Scene {
           this._runChainVerify(answerBool, () => {
             this.networkWindow.log(`⛓ CHAIN: ${answerBool ? 'CONFIRMED' : 'NEGATIVE'}`, answerBool ? '#00ff41' : '#ff4444');
 
-            if (!answerBool && !this.cpu.done) {
-              this._penalizeCpuTime(LIE_PENALTY);
-            }
+            // Compute which non-eliminated cards this intel says should be X'd out
+            // YES → eliminate agents that DON'T match; NO → eliminate agents that DO match
+            const cat = category.toLowerCase();
+            const eliminable = this.characters.filter(c => {
+              if (s.eliminated.has(c.id)) return false;
+              const matches = String(c[cat]).toUpperCase() === value.toUpperCase();
+              return answerBool ? !matches : matches;
+            }).map(c => c.id);
+            this._pendingEliminations = new Set(eliminable);
+            this._pendingEliminationCount = eliminable.length;
+            this._pendingActedOn = 0;
 
             if (s.questionsLeft === 0) {
               this.networkWindow.log('QUESTIONS EXHAUSTED — DECLARE NOW', '#ffaa00');
@@ -1228,40 +1216,27 @@ export class GameScene extends Phaser.Scene {
 
     this.networkWindow.runProofAnimation(async () => {
       try {
-        const result = await declareSpy(this.sessionId, character.id, this.walletAddress);
+        const result = await declareSpy(this.sessionId, character.id, this.walletAddress, this.gameContractAddress, this.gameId);
         const score = this._calcScore(result.correct);
 
-        this.networkWindow.showProofResult(result.correct, result.proof?.hash, this.sound);
+        this.networkWindow.showProofResult(result.correct, result.onChain?.txId, this.sound);
 
-        try { await submitScore(this.walletAddress || 'ANONYMOUS', score); } catch (e) {}
-
-        // Increment on-chain counter for every spy declaration
         try {
-          let contract = window.__midnightContract;
+          await submitScore(
+            this.sessionId,
+            this.walletAddress || 'ANONYMOUS',
+            score,
+            MAX_QUESTIONS - this.state.questionsLeft,
+            TIMER_SECONDS - this.state.timeSeconds,
+            result.correct,
+          );
+        } catch (e) {}
 
-          // Re-join if contract was lost (e.g. page reload without full reconnect)
-          if (!contract && window.__midnightConnectedApi) {
-            this.networkWindow.log('REJOINING CONTRACT...', '#00aa22');
-            const { joinCounter } = await import('/src/midnight.ts');
-            const result = await joinCounter(
-              window.__midnightConnectedApi,
-              import.meta.env.VITE_CONTRACT_ADDRESS,
-            );
-            window.__midnightContract = result;
-            contract = result;
-          }
-
-          if (!contract) {
-            this.networkWindow.log('NO WALLET — SKIPPING ON-CHAIN', '#ff8800');
-          } else {
-            const { increment } = await import('/src/midnight.ts');
-            this.networkWindow.log('SUBMITTING ZK PROOF ON-CHAIN...', '#00aa22');
-            const txData = await increment(contract.counterContract);
-            this.networkWindow.log(`TX: ${String(txData.txId).slice(0, 20)}...`, '#00ff41');
-          }
-        } catch (e) {
-          this.networkWindow.log(`ON-CHAIN ERR: ${String(e.message || e).slice(0, 40)}`, '#ff4444');
-          console.error('[midnight] increment failed:', e);
+        // Log on-chain result if available
+        if (result.onChain) {
+          this.networkWindow.log(`TX: ${String(result.onChain.txId).slice(0, 20)}...`, '#00ff41');
+        } else if (this.gameContractAddress) {
+          this.networkWindow.log('ON-CHAIN: PROOF SKIPPED', '#ff8800');
         }
 
         this.time.delayedCall(1500, () => {
@@ -1284,7 +1259,6 @@ export class GameScene extends Phaser.Scene {
 
   _endGame(data) {
     if (this.timerEvent) this.timerEvent.remove();
-    if (this.cpuTimerEvent) this.cpuTimerEvent.remove();
     if (this.cpuTurnTimer) this.cpuTurnTimer.remove();
     this.cameras.main.fadeOut(500, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
@@ -1339,8 +1313,8 @@ export class GameScene extends Phaser.Scene {
       // Log CPU question + player answer to secure channel
       const cpuSentence = formatQuestion(question.category, question.value);
       const answerColor = playerAnswer === 'YES' ? '#00ff41' : '#ff4444';
-      this.networkWindow.log(`CPU: ${cpuSentence}`, '#ff6600');
-      this.networkWindow.log(playerAnswer === 'YES' ? 'YOU: Affirmative.' : 'YOU: Negative.', answerColor);
+      this.networkWindow.logTab(2, `CPU: ${cpuSentence}`, '#ff6600');
+      this.networkWindow.logTab(2, `YOU: ${playerAnswer}${wasLie ? ' [LIE]' : ' [TRUE]'}`, wasLie ? '#ff4444' : '#00ff41');
       if (this.sound) playerAnswer === 'YES' ? this.sound.beepHigh() : this.sound.beepLow();
 
       // Show answer on line1, keep sentence on lines 2+3
@@ -1355,17 +1329,17 @@ export class GameScene extends Phaser.Scene {
 
         if (wasLie) {
           this._penalizePlayerTime(LIE_PENALTY);
-          this._penalizeCpuTime(LIE_PENALTY);
         }
 
-        // CPU eliminates based on truth (chain revealed it)
+        // CPU eliminates based on the true answer (chain always reveals truth)
         const cat = question.category.toLowerCase();
+        const playerSpy = this.characters[this.playerSpyId];
+        const trueAnswer = String(playerSpy[cat]).toUpperCase() === question.value.toUpperCase() ? 'YES' : 'NO';
         this.cpu.remaining.forEach(id => {
           const char = this.characters[id];
-          const charVal = String(char[cat]).toUpperCase();
-          const matches = charVal === question.value.toUpperCase();
-          if (truthBool && !matches) this._cpuEliminate(id);
-          if (!truthBool && matches) this._cpuEliminate(id);
+          const matches = String(char[cat]).toUpperCase() === question.value.toUpperCase();
+          if (trueAnswer === 'YES' && !matches) this._cpuEliminate(id);
+          if (trueAnswer === 'NO' && matches) this._cpuEliminate(id);
         });
 
         this.cpuStatusText.setText(`CPU: ${this.cpu.remaining.size} SUSPECTS`);
@@ -1464,10 +1438,83 @@ export class GameScene extends Phaser.Scene {
 
   // ── Cleanup ───────────────────────────────────────────────────────────
 
+  _showPauseMenu() {
+    this._paused = true;
+    if (this.timerEvent) this.timerEvent.paused = true;
+
+    const { gameW, gameH } = this._L;
+    const objs = this._pauseObjects;
+
+    // Dim overlay
+    const overlay = this.add.rectangle(gameW / 2, gameH / 2, gameW, gameH, 0x000000, 0.7).setDepth(50);
+    objs.push(overlay);
+
+    // Panel
+    const pw = 220, ph = 140;
+    const px = gameW / 2 - pw / 2, py = gameH / 2 - ph / 2;
+    const panel = this.add.graphics().setDepth(51);
+    panel.fillStyle(COLORS.PANEL_BG, 1);
+    panel.fillRect(px, py, pw, ph);
+    panel.lineStyle(2, COLORS.PRIMARY, 1);
+    panel.strokeRect(px, py, pw, ph);
+    objs.push(panel);
+
+    // Title
+    const title = this.add.text(gameW / 2, py + 22, '[ PAUSED ]', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '11px',
+      color: '#00ff41',
+    }).setOrigin(0.5).setDepth(52);
+    objs.push(title);
+
+    // Resume button
+    const resumeBtn = this._makePauseButton(gameW / 2, py + 62, 'RESUME', '#00ff41', () => this._hidePauseMenu());
+    objs.push(...resumeBtn);
+
+    // Quit button
+    const quitBtn = this._makePauseButton(gameW / 2, py + 100, 'QUIT MISSION', '#ff4444', () => {
+      this.cameras.main.fadeOut(400, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('MenuScene');
+      });
+    });
+    objs.push(...quitBtn);
+  }
+
+  _makePauseButton(x, y, label, color, onClick) {
+    const bw = 160, bh = 22;
+    const bg = this.add.graphics().setDepth(52);
+    bg.fillStyle(0x001800, 1);
+    bg.fillRect(x - bw / 2, y - bh / 2, bw, bh);
+    bg.lineStyle(1, color, 1);
+    bg.strokeRect(x - bw / 2, y - bh / 2, bw, bh);
+
+    const txt = this.add.text(x, y, label, {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '8px',
+      color,
+    }).setOrigin(0.5).setDepth(53);
+
+    const hit = this.add.rectangle(x, y, bw, bh, 0, 0).setInteractive().setDepth(54);
+    hit.on('pointerover', () => { bg.clear(); bg.fillStyle(0x003300, 1); bg.fillRect(x - bw / 2, y - bh / 2, bw, bh); bg.lineStyle(1, color, 1); bg.strokeRect(x - bw / 2, y - bh / 2, bw, bh); });
+    hit.on('pointerout',  () => { bg.clear(); bg.fillStyle(0x001800, 1); bg.fillRect(x - bw / 2, y - bh / 2, bw, bh); bg.lineStyle(1, color, 1); bg.strokeRect(x - bw / 2, y - bh / 2, bw, bh); });
+    hit.on('pointerdown', () => { if (this.sound) this.sound.click(); onClick(); });
+
+    return [bg, txt, hit];
+  }
+
+  _hidePauseMenu() {
+    this._paused = false;
+    if (this.timerEvent) this.timerEvent.paused = false;
+    this._pauseObjects.forEach(o => o.destroy());
+    this._pauseObjects = [];
+  }
+
   shutdown() {
     if (this.timerEvent) this.timerEvent.remove();
-    if (this.cpuTimerEvent) this.cpuTimerEvent.remove();
     if (this.cpuTurnTimer) this.cpuTurnTimer.remove();
+    this._pauseObjects?.forEach(o => o.destroy());
+    this._pauseObjects = [];
     this.cards?.forEach(c => c.destroy());
     this.questionPanel?.destroy();
     this.networkWindow?.destroy();

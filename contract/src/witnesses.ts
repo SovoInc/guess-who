@@ -1,21 +1,21 @@
-// This file is part of midnightntwrk/example-counter.
-// Copyright (C) 2025 Midnight Foundation
-// SPDX-License-Identifier: Apache-2.0
-// Licensed under the Apache License, Version 2.0 (the "License");
-// You may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// This is how we type an empty object.
+// Counter private state (kept for counter compat)
 export type CounterPrivateState = {
   privateCounter: number;
 };
 
 export const witnesses = {};
+
+// GuessWho private state — holds the secret culprit id and per-game salt
+export type GuessWhoPrivateState = {
+  culpritId: number;   // 0–15, the character index — stays private
+  salt: Uint8Array;    // 32 random bytes, generated fresh per game
+};
+
+export const guessWhoWitnesses = {
+  culprit_id: ({ privateState }: { privateState: GuessWhoPrivateState }): [GuessWhoPrivateState, bigint] => {
+    return [privateState, BigInt(privateState.culpritId)];
+  },
+  salt: ({ privateState }: { privateState: GuessWhoPrivateState }): [GuessWhoPrivateState, Uint8Array] => {
+    return [privateState, privateState.salt];
+  },
+};

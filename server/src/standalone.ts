@@ -41,4 +41,4 @@ console.log(`
 ──────────────────────────────────────────────────────────────
 `);
 
-startSponsorServer(walletCtx);
+await startSponsorServer(walletCtx, config);

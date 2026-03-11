@@ -19,14 +19,14 @@ export async function askQuestion(sessionId, category, value) {
   return res.json(); // { answer: 'YES' | 'NO' }
 }
 
-export async function declareSpy(sessionId, guessId, shieldedAddress) {
+export async function declareSpy(sessionId, guessId, shieldedAddress, contractAddress = null, gameId = null) {
   const res = await fetch(`${BASE}/api/declare`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, guessId, shieldedAddress }),
+    body: JSON.stringify({ sessionId, guessId, shieldedAddress, contractAddress, gameId }),
   });
   if (!res.ok) throw new Error('Failed to declare spy');
-  return res.json(); // { correct, spyId, spy, proof }
+  return res.json(); // { correct, spy, onChain }
 }
 
 export async function getScores() {
@@ -35,12 +35,63 @@ export async function getScores() {
   return res.json(); // { leaderboard: [...] }
 }
 
-export async function submitScore(shieldedAddress, score) {
+export async function submitScore(sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct) {
   const res = await fetch(`${BASE}/api/scores`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ shieldedAddress, score }),
+    body: JSON.stringify({ sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct }),
   });
   if (!res.ok) throw new Error('Failed to submit score');
   return res.json();
+}
+
+/**
+ * Deploy a GuessWho contract on-chain for a new game.
+ * Sends the commitment (hash of culpritId + salt) to the server which deploys the contract.
+ * Returns { contractAddress } — the address is the on-chain game ID.
+ *
+ * NOTE: culpritId and salt are sent to the server here so it can hold the private state
+ * for the submitGuess proof. This is acceptable for the current architecture where the
+ * server is trusted (it knows the culprit anyway via gameManager).
+ *
+ * @param {string} commitment - hex-encoded 32-byte commitment
+ * @param {number} culpritId - 0–15
+ * @param {string} salt - hex-encoded 32-byte salt
+ */
+export async function createOnChainGame(commitment, culpritId, salt) {
+  const res = await fetch(`${BASE}/api/game/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ commitment, culpritId, salt }),
+  });
+  if (res.status === 501) return null; // contract not compiled yet — skip gracefully
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to create on-chain game');
+  }
+  return res.json(); // { contractAddress }
+}
+
+/**
+ * Submit the player's final guess on-chain.
+ * The server holds the private state (culpritId + salt) and generates the ZK proof.
+ * Returns { correct, txId }.
+ *
+ * @param {string} contractAddress - the game's contract address (from createOnChainGame)
+ * @param {number} guessId - the character id the player is accusing
+ * @param {number} culpritId - the actual culprit (server validates this)
+ * @param {string} salt - hex-encoded salt
+ */
+export async function submitOnChainGuess(contractAddress, guessId, culpritId, salt) {
+  const res = await fetch(`${BASE}/api/game/guess`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contractAddress, guessId, culpritId, salt }),
+  });
+  if (res.status === 501) return null; // contract not compiled yet — skip gracefully
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to submit on-chain guess');
+  }
+  return res.json(); // { correct, txId }
 }

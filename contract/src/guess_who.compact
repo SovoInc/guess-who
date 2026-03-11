@@ -1,0 +1,74 @@
+pragma language_version >= 0.20;
+
+import CompactStandardLibrary;
+
+// --- Structs ---
+
+struct GameSecret {
+  culprit: Uint<64>;
+  salt: Bytes<32>;
+}
+
+struct Game {
+  commitment: Bytes<32>;
+  active: Boolean;
+}
+
+// --- Ledger state ---
+
+export ledger next_game_id: Counter;
+export ledger games: Map<Uint<64>, Game>;
+
+// --- Witnesses (per-game private state, keyed by game_id) ---
+
+witness culprit_id(): Uint<64>;
+witness salt(): Bytes<32>;
+
+// --- Circuits ---
+
+// Create a new game. The commitment is computed inside the circuit from
+// the private witnesses so it always matches what submit_guess will verify.
+// Returns the game_id so the caller can reference this game later.
+export circuit create_game(): Uint<64> {
+  const game_id = next_game_id.read();
+  next_game_id.increment(1);
+
+  const secret      = culprit_id();
+  const secret_salt = salt();
+  const commitment: Bytes<32> = persistentHash<GameSecret>(GameSecret { culprit: secret, salt: secret_salt });
+
+  games.insert(game_id, Game {
+    commitment: disclose(commitment),
+    active: true
+  });
+
+  return disclose(game_id);
+}
+
+// Submit the final guess for a game.
+// The ZK proof verifies:
+//   1. hash(culprit_id, salt) == stored commitment for this game_id
+//   2. culprit_id == guess_id
+// Returns true if correct, false otherwise. Marks game inactive on correct guess.
+export circuit submit_guess(game_id: Uint<64>, guess_id: Uint<64>): Boolean {
+  const pub_game_id = disclose(game_id);
+  const game = games.lookup(pub_game_id);
+  assert (game.active, "Game is not active");
+
+  const secret      = culprit_id();
+  const secret_salt = salt();
+
+  const computed: Bytes<32> = persistentHash<GameSecret>(GameSecret { culprit: secret, salt: secret_salt });
+  assert (computed == game.commitment, "Commitment mismatch");
+
+  const is_correct = disclose(secret == guess_id);
+
+  if (is_correct) {
+    games.insert(pub_game_id, Game {
+      commitment: game.commitment,
+      active: false
+    });
+  }
+
+  return is_correct;
+}
