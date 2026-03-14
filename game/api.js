@@ -29,6 +29,12 @@ export async function declareSpy(sessionId, guessId, shieldedAddress, contractAd
   return res.json(); // { correct, spy, onChain }
 }
 
+export async function getNetworkStatus() {
+  const res = await fetch(`${BASE}/api/status`);
+  if (!res.ok) throw new Error('Failed to get status');
+  return res.json(); // { proofServer: bool, node: bool, indexer: bool }
+}
+
 export async function getScores() {
   const res = await fetch(`${BASE}/api/scores`);
   if (!res.ok) throw new Error('Failed to get scores');

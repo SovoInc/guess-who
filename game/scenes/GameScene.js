@@ -15,6 +15,19 @@ import { truncateAddress } from '../wallet.js';
 // CPU turn delay after player finishes (ms)
 const CPU_TURN_DELAY = 2400;
 
+// Map QUESTION_CATEGORIES key → Character property name
+function _catToProp(category) {
+  const map = {
+    SEX:         'sex',
+    HEADWEAR:    'headwear',
+    HAIR:        'hairShape',
+    FACIAL_HAIR: 'facialHair',
+    EYEWEAR:     'eyewear',
+    MARKER:      'marker',
+  };
+  return map[category] || category.toLowerCase();
+}
+
 // Mini card dimensions for CPU board
 const MINI_W = 62;
 const MINI_H = 56;
@@ -200,7 +213,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     const playerSpy = this.characters[this.playerSpyId];
-    this.add.text(gameW / 2 - 80, 32, `YOUR AGENT: ${playerSpy.codename}`, {
+    this.add.text(gameW / 2 - 80, 32, `YOUR AGENT: ${playerSpy.name}`, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: fs2,
       color: '#ffaa00',
@@ -294,7 +307,7 @@ export class GameScene extends Phaser.Scene {
         this.networkWindow.log(`⚡ ${label}`, isFullCombo ? '#ffff00' : '#00ff41');
       } else {
         // Wild guess — no points, warn
-        this.networkWindow.log(`ELIMINATED: ${character.codename} [NO INTEL]`, '#888888');
+        this.networkWindow.log(`ELIMINATED: ${character.name} [NO INTEL]`, '#888888');
       }
 
       this._updateHUD();
@@ -423,8 +436,8 @@ export class GameScene extends Phaser.Scene {
       gfx.lineStyle(1, 0x330000, 1);
       gfx.strokeRect(cx, cy, MINI_W, miniH);
 
-      // Only show agent codename
-      const nameT = this.add.text(cx + MINI_W / 2, cy + miniH / 2, char.codename, {
+      // Only show agent name
+      const nameT = this.add.text(cx + MINI_W / 2, cy + miniH / 2, char.name, {
         fontFamily: "'Press Start 2P', monospace",
         fontSize: '7px',
         color: '#ff4444',
@@ -594,29 +607,46 @@ export class GameScene extends Phaser.Scene {
     gfx.fillStyle(COLORS.TEXT_DIM, 0.9);
     gfx.fillRect(cx - 22, cy + 4, 44, 18);
 
-    const feat = spy.feature;
+    // Eyewear
     gfx.lineStyle(1, COLORS.PRIMARY, 0.85);
-    if (feat === 'GLASSES') {
+    const eyewear = spy.eyewear;
+    if (eyewear === 'glasses') {
       gfx.strokeRect(cx - 13, cy - 22, 10, 7);
       gfx.strokeRect(cx + 3,  cy - 22, 10, 7);
       gfx.beginPath(); gfx.moveTo(cx - 3, cy - 18); gfx.lineTo(cx + 3, cy - 18); gfx.strokePath();
-    } else if (feat === 'CYBERNETIC_EYE') {
-      gfx.fillStyle(COLORS.DANGER, 1);
-      gfx.fillCircle(cx + 7, cy - 20, 4);
-    } else if (feat === 'BEARD') {
+    } else if (eyewear === 'goggles') {
+      gfx.strokeRect(cx - 14, cy - 24, 28, 8);
+    } else if (eyewear === 'visor') {
+      gfx.fillStyle(COLORS.TEXT_DIM, 0.5);
+      gfx.fillRect(cx - 14, cy - 25, 28, 9);
+      gfx.lineStyle(1, COLORS.ACCENT, 0.6);
+      gfx.strokeRect(cx - 14, cy - 25, 28, 9);
+    }
+    // Facial hair
+    const facialHair = spy.facialHair;
+    if (facialHair === 'beard') {
       gfx.fillStyle(COLORS.DIM, 1);
       gfx.fillRect(cx - 12, cy - 4, 24, 9);
-    } else if (feat === 'SCAR') {
+    } else if (facialHair === 'mustache') {
+      gfx.fillStyle(COLORS.DIM, 1);
+      gfx.fillRect(cx - 9, cy - 8, 18, 4);
+    } else if (facialHair === 'goatee') {
+      gfx.fillStyle(COLORS.DIM, 1);
+      gfx.fillRect(cx - 6, cy - 4, 12, 6);
+    }
+    // Marker
+    const marker = spy.marker;
+    gfx.lineStyle(1, COLORS.PRIMARY, 0.85);
+    if (marker === 'scar') {
       gfx.lineStyle(1, COLORS.DANGER, 0.9);
       gfx.beginPath(); gfx.moveTo(cx - 4, cy - 26); gfx.lineTo(cx + 2, cy - 14); gfx.strokePath();
-    } else if (feat === 'BALD') {
-      gfx.lineStyle(1, COLORS.PRIMARY, 0.3);
-      gfx.strokeRect(cx - 15, cy - 32, 30, 2);
-    } else if (feat === 'TATTOO') {
-      gfx.lineStyle(1, COLORS.DIM, 0.9);
-      gfx.strokeCircle(cx - 9, cy - 12, 5);
-    } else if (feat === 'HEADSET') {
-      // Arc over head + earpiece + mic wire
+    } else if (marker === 'eyepatch') {
+      gfx.fillStyle(0x000000, 1);
+      gfx.fillRect(cx - 14, cy - 24, 12, 7);
+      gfx.lineStyle(1, COLORS.DIM, 1);
+      gfx.strokeRect(cx - 14, cy - 24, 12, 7);
+      gfx.beginPath(); gfx.moveTo(cx - 14, cy - 21); gfx.lineTo(cx + 14, cy - 21); gfx.strokePath();
+    } else if (marker === 'headset') {
       gfx.lineStyle(1, COLORS.PRIMARY, 0.9);
       gfx.beginPath();
       gfx.arc(cx, cy - 26, 17, Math.PI, 0, false);
@@ -624,24 +654,11 @@ export class GameScene extends Phaser.Scene {
       gfx.fillStyle(COLORS.PRIMARY, 1);
       gfx.fillCircle(cx + 17, cy - 20, 3);
       gfx.lineStyle(1, COLORS.PRIMARY, 0.7);
-      gfx.beginPath();
-      gfx.moveTo(cx + 17, cy - 17);
-      gfx.lineTo(cx + 17, cy - 8);
-      gfx.strokePath();
-    } else if (feat === 'EYE_PATCH') {
-      // Dark patch over left eye + strap
-      gfx.fillStyle(0x000000, 1);
-      gfx.fillRect(cx - 14, cy - 24, 12, 7);
-      gfx.lineStyle(1, COLORS.DIM, 1);
-      gfx.strokeRect(cx - 14, cy - 24, 12, 7);
-      gfx.beginPath();
-      gfx.moveTo(cx - 14, cy - 21);
-      gfx.lineTo(cx + 14, cy - 21);
-      gfx.strokePath();
+      gfx.beginPath(); gfx.moveTo(cx + 17, cy - 17); gfx.lineTo(cx + 17, cy - 8); gfx.strokePath();
     }
 
     if (this.dialogNameBadge) {
-      this.dialogNameBadge.setText(`▶ ${spy.codename}`).setColor('#00ff41');
+      this.dialogNameBadge.setText(`▶ ${spy.name}`).setColor('#00ff41');
     }
 
     this._dialogMode = 'player';
@@ -1129,7 +1146,7 @@ export class GameScene extends Phaser.Scene {
 
             // Compute which non-eliminated cards this intel says should be X'd out
             // YES → eliminate agents that DON'T match; NO → eliminate agents that DO match
-            const cat = category.toLowerCase();
+            const cat = _catToProp(category);
             const eliminable = this.characters.filter(c => {
               if (s.eliminated.has(c.id)) return false;
               const matches = String(c[cat]).toUpperCase() === value.toUpperCase();
@@ -1212,7 +1229,7 @@ export class GameScene extends Phaser.Scene {
 
     this.cards.forEach(card => card.setPulsing(false));
     this.questionPanel.setDisabled(true);
-    this.networkWindow.log(`DECLARING: ${character.codename}`, '#00ff41');
+    this.networkWindow.log(`DECLARING: ${character.name}`, '#00ff41');
 
     this.networkWindow.runProofAnimation(async () => {
       try {
@@ -1307,7 +1324,7 @@ export class GameScene extends Phaser.Scene {
       if (this.state.gameOver || this.cpu.done) return;
 
       const playerSpy = this.characters[this.playerSpyId];
-      const correctAnswer = String(playerSpy[question.category.toLowerCase()]).toUpperCase() === question.value.toUpperCase() ? 'YES' : 'NO';
+      const correctAnswer = String(playerSpy[_catToProp(question.category)]).toUpperCase() === question.value.toUpperCase() ? 'YES' : 'NO';
       const wasLie = playerAnswer !== correctAnswer;
 
       // Log CPU question + player answer to secure channel
@@ -1332,7 +1349,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         // CPU eliminates based on the true answer (chain always reveals truth)
-        const cat = question.category.toLowerCase();
+        const cat = _catToProp(question.category);
         const playerSpy = this.characters[this.playerSpyId];
         const trueAnswer = String(playerSpy[cat]).toUpperCase() === question.value.toUpperCase() ? 'YES' : 'NO';
         this.cpu.remaining.forEach(id => {
@@ -1377,7 +1394,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const category of categories) {
       for (const value of QUESTION_CATEGORIES[category]) {
-        const cat = category.toLowerCase();
+        const cat = _catToProp(category);
         const matching = remaining.filter(id =>
           String(this.characters[id][cat]).toUpperCase() === value.toUpperCase()
         ).length;
@@ -1399,7 +1416,7 @@ export class GameScene extends Phaser.Scene {
     const correct = guessId === this.playerSpyId;
     const playerSpy = this.characters[this.playerSpyId];
 
-    this.networkWindow.log(`CPU DECLARES: ${guess.codename}`, '#ff4444');
+    this.networkWindow.log(`CPU DECLARES: ${guess.name}`, '#ff4444');
     if (this.sound) correct ? this.sound.proofFail() : this.sound.beepLow();
 
     const mini = this.cpuMiniCards[guessId];
@@ -1429,7 +1446,7 @@ export class GameScene extends Phaser.Scene {
         });
       });
     } else {
-      this.networkWindow.log(`CPU WRONG — YOUR AGENT IS ${playerSpy.codename}`, '#00ff41');
+      this.networkWindow.log(`CPU WRONG — YOUR AGENT IS ${playerSpy.name}`, '#00ff41');
       this.cpuStatusText.setText('CPU: MISSION FAILED');
       // CPU lost — hand turn to player for remaining questions
       this._endCpuTurn();

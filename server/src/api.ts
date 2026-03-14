@@ -27,6 +27,8 @@ import { toHex } from '@midnight-ntwrk/midnight-js-utils';
 import { getNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
 import { Buffer } from 'buffer';
+import { mnemonicToSeed, validateMnemonic } from '@scure/bip39';
+import { wordlist as english } from '@scure/bip39/wordlists/english';
 import {
   MidnightBech32m,
   ShieldedAddress,
@@ -282,8 +284,15 @@ const buildDustConfig = ({ indexer, indexerWS, node, proofServer }: Config) => (
   relayURL: new URL(node.replace(/^http/, 'ws')),
 });
 
-const deriveKeysFromSeed = (seed: string) => {
-  const hdWallet = HDWallet.fromSeed(Buffer.from(seed, 'hex'));
+const deriveKeysFromSeed = async (seed: string) => {
+  let seedBytes: Uint8Array;
+  if (validateMnemonic(seed.trim(), english)) {
+    // Full 64-byte BIP39 seed — same as what the Lace wallet uses
+    seedBytes = await mnemonicToSeed(seed.trim());
+  } else {
+    seedBytes = Buffer.from(seed, 'hex');
+  }
+  const hdWallet = HDWallet.fromSeed(seedBytes);
   if (hdWallet.type !== 'seedOk') {
     throw new Error('Failed to initialize HDWallet from seed');
   }
@@ -405,7 +414,7 @@ export const buildWalletAndWaitForFunds = async (config: Config, seed: string): 
   const { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore } = await withStatus(
     'Building wallet',
     async () => {
-      const keys = deriveKeysFromSeed(seed);
+      const keys = await deriveKeysFromSeed(seed);
       const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(keys[Roles.Zswap]);
       const dustSecretKey = ledger.DustSecretKey.fromSeed(keys[Roles.Dust]);
       const unshieldedKeystore = createKeystore(keys[Roles.NightExternal], getNetworkId());

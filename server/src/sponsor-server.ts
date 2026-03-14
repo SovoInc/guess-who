@@ -13,6 +13,7 @@ import { createSession, answerQuestion, evaluateGuess } from '../../lib/gameMana
 import { recordGameScore, getLeaderboard } from '../../lib/scores.js';
 import { claimPoolEntry } from '../../lib/gamePool.js';
 import { runPoolRefill } from './poolWorker.js';
+import { enqueueOnChain } from './onChainQueue.js';
 
 let logger: Logger;
 let walletCtxGlobal: WalletContext | null = null;
@@ -23,14 +24,6 @@ let sharedContractAddress: string | null = null;
 
 // In-memory map from sessionId -> on-chain game_id (bigint)
 const sessionGameIds = new Map<string, bigint>();
-
-// Serialize on-chain calls to avoid LevelDB lock contention
-let onChainQueue: Promise<void> = Promise.resolve();
-function enqueueOnChain<T>(fn: () => Promise<T>): Promise<T> {
-  const next = onChainQueue.then(() => fn());
-  onChainQueue = next.then(() => {}, () => {});
-  return next;
-}
 
 export function setSponsorLogger(_logger: Logger): void {
   logger = _logger;
@@ -245,6 +238,28 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  app.get('/api/status', async (_req, res) => {
+    const check = async (name: string, url: string): Promise<{ name: string; ok: boolean }> => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+        await fetch(url, { method: 'GET', signal: controller.signal });
+        clearTimeout(timeout);
+        return { name, ok: true };
+      } catch {
+        return { name, ok: false };
+      }
+    };
+
+    const [proofServer, node, indexer] = await Promise.all([
+      check('proofServer', config.proofServer),
+      check('node', config.node),
+      check('indexer', config.indexer),
+    ]);
+
+    res.json({ gameServer: true, proofServer: proofServer.ok, node: node.ok, indexer: indexer.ok });
   });
 
   app.get('/api/dust', async (_req, res) => {

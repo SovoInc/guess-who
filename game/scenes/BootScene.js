@@ -5,7 +5,7 @@ import { SoundSynth } from '../audio/SoundSynth.js';
 import { clearAddress } from '../wallet.js';
 
 const BOOT_LINES = [
-  'GHOST CYPHER OS v2.7.1',
+  'PROOF OF SPY OS v2.7.1',
   'INITIALIZING SECURE CHANNEL...',
   'LOADING ENCRYPTION MODULES...',
   'CALIBRATING ZK PROOF CIRCUITS...',

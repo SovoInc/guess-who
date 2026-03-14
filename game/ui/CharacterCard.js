@@ -37,8 +37,8 @@ export class CharacterCard {
     const fs6  = Math.max(6, Math.floor(8  * scale)) + 'px';
     const fs5  = Math.max(5, Math.floor(7  * scale)) + 'px';
 
-    // Codename
-    this.nameText = scene.add.text(cw / 2, ch - 54 * scale, character.codename, {
+    // Name
+    this.nameText = scene.add.text(cw / 2, ch - 54 * scale, character.name, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: fs8,
       color: '#00ff41',
@@ -46,8 +46,9 @@ export class CharacterCard {
     }).setOrigin(0.5, 0);
     this.container.add(this.nameText);
 
-    // Rank
-    this.rankText = scene.add.text(cw / 2, ch - 40 * scale, character.rank, {
+    // Headwear / hair line
+    const hw = character.headwear !== 'none' ? character.headwear.toUpperCase() : character.hairShape.toUpperCase();
+    this.rankText = scene.add.text(cw / 2, ch - 40 * scale, hw, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: fs6,
       color: '#39ff14',
@@ -55,8 +56,9 @@ export class CharacterCard {
     }).setOrigin(0.5, 0);
     this.container.add(this.rankText);
 
-    // Specialty
-    this.specText = scene.add.text(cw / 2, ch - 28 * scale, character.specialty, {
+    // Eyewear / facial hair line
+    const ew = character.eyewear !== 'none' ? character.eyewear.toUpperCase() : (character.facialHair !== 'none' ? character.facialHair.toUpperCase() : 'CLEAN');
+    this.specText = scene.add.text(cw / 2, ch - 28 * scale, ew, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: fs6,
       color: '#00cc33',
@@ -64,8 +66,11 @@ export class CharacterCard {
     }).setOrigin(0.5, 0);
     this.container.add(this.specText);
 
-    // Origin
-    this.originText = scene.add.text(cw / 2, ch - 16 * scale, character.origin, {
+    // Sex + marker line
+    const sexLabel = character.sex === 'F' ? '♀' : '♂';
+    const markerLabel = character.marker !== 'none' ? character.marker.replace(/_/g, ' ').toUpperCase() : '';
+    const infoLine = markerLabel ? `${sexLabel} ${markerLabel}` : sexLabel;
+    this.originText = scene.add.text(cw / 2, ch - 16 * scale, infoLine, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: fs6,
       color: '#00aa22',
@@ -73,8 +78,8 @@ export class CharacterCard {
     }).setOrigin(0.5, 0);
     this.container.add(this.originText);
 
-    // Feature label (top-right)
-    this.featureText = scene.add.text(cw - 4, 4, character.feature.replace(/_/g, ' '), {
+    // Role label (top-right)
+    this.featureText = scene.add.text(cw - 4, 4, character.role.toUpperCase(), {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: fs5,
       color: '#00aa22',
@@ -138,89 +143,116 @@ export class CharacterCard {
 
     const scale = cw / CARD_W;
     const cx = cw / 2;
-    const avatarTopH = ch - Math.floor(68 * scale); // how much space avatar gets
+    const avatarTopH = ch - Math.floor(68 * scale);
 
-    // Head shape — centered vertically in the avatar zone
     const headY = Math.floor(avatarTopH * 0.15);
     const hw = Math.floor(20 * scale);
     const hh = Math.floor(23 * scale);
     gfx.fillStyle(COLORS.DIM, 1);
     gfx.fillRect(cx - hw, headY, hw * 2, hh);
 
-    // Shoulder silhouette
     const shoulderY = headY + hh;
     const sw = Math.floor(28 * scale);
     const sh = Math.floor(11 * scale);
     gfx.fillStyle(COLORS.TEXT_DIM, 0.8);
     gfx.fillRect(cx - sw, shoulderY, sw * 2, sh);
 
-    // Feature-specific detail
-    const feat = this.character.feature;
-    gfx.lineStyle(1, COLORS.PRIMARY, 0.6);
-
-    const eyeY = headY + Math.floor(8 * scale);
+    const eyeY   = headY + Math.floor(8 * scale);
     const mouthY = headY + Math.floor(16 * scale);
 
-    if (feat === 'GLASSES') {
+    // Headwear
+    gfx.lineStyle(1, COLORS.PRIMARY, 0.7);
+    const headwear = this.character.headwear;
+    if (headwear === 'helmet') {
+      gfx.fillStyle(COLORS.DIM, 1);
+      gfx.fillRect(cx - hw - 2, headY - Math.floor(6 * scale), (hw + 2) * 2, Math.floor(10 * scale));
+    } else if (headwear === 'cap') {
+      gfx.fillStyle(COLORS.TEXT_DIM, 1);
+      gfx.fillRect(cx - hw, headY - Math.floor(5 * scale), hw * 2, Math.floor(6 * scale));
+      gfx.fillRect(cx - hw - 4, headY - Math.floor(1 * scale), (hw + 4) * 2, Math.floor(3 * scale));
+    } else if (headwear === 'beret') {
+      gfx.fillStyle(COLORS.TEXT_DIM, 0.9);
+      gfx.fillRect(cx - hw + 2, headY - Math.floor(6 * scale), hw * 2 - 4, Math.floor(7 * scale));
+      // tilt beret right
+      gfx.fillRect(cx + Math.floor(4 * scale), headY - Math.floor(8 * scale), Math.floor(12 * scale), Math.floor(4 * scale));
+    } else if (headwear === 'hood') {
+      gfx.fillStyle(COLORS.TEXT_DIM, 0.7);
+      gfx.fillRect(cx - hw - 4, headY - Math.floor(4 * scale), (hw + 4) * 2, hh + Math.floor(8 * scale));
+      // Shadow over face
+      gfx.fillStyle(0x000000, 0.4);
+      gfx.fillRect(cx - hw + 2, headY + Math.floor(2 * scale), (hw - 2) * 2, Math.floor(12 * scale));
+    }
+
+    // Eyewear
+    const eyewear = this.character.eyewear;
+    gfx.lineStyle(1, COLORS.PRIMARY, 0.8);
+    if (eyewear === 'glasses') {
       const gw = Math.floor(7 * scale);
       gfx.strokeRect(cx - hw + 2, eyeY, gw, Math.floor(4 * scale));
-      gfx.strokeRect(cx + 2,       eyeY, gw, Math.floor(4 * scale));
+      gfx.strokeRect(cx + 2, eyeY, gw, Math.floor(4 * scale));
       gfx.beginPath(); gfx.moveTo(cx - 2, eyeY + 2); gfx.lineTo(cx + 2, eyeY + 2); gfx.strokePath();
-    } else if (feat === 'CYBERNETIC_EYE') {
-      gfx.fillStyle(COLORS.DANGER, 0.8);
-      gfx.fillCircle(cx + Math.floor(8 * scale), eyeY + 2, Math.floor(3 * scale));
-    } else if (feat === 'BEARD') {
+    } else if (eyewear === 'goggles') {
+      gfx.strokeRect(cx - hw + 1, eyeY - 1, Math.floor(14 * scale), Math.floor(6 * scale));
+      gfx.lineStyle(1, COLORS.DIM, 1);
+      gfx.strokeRect(cx - hw + 3, eyeY + 1, Math.floor(10 * scale), Math.floor(3 * scale));
+    } else if (eyewear === 'visor') {
+      gfx.fillStyle(COLORS.TEXT_DIM, 0.5);
+      gfx.fillRect(cx - hw + 1, eyeY - 2, (hw - 1) * 2, Math.floor(7 * scale));
+      gfx.lineStyle(1, COLORS.ACCENT, 0.6);
+      gfx.strokeRect(cx - hw + 1, eyeY - 2, (hw - 1) * 2, Math.floor(7 * scale));
+    }
+
+    // Facial hair
+    const facialHair = this.character.facialHair;
+    if (facialHair === 'beard') {
       gfx.fillStyle(COLORS.DIM, 1);
       gfx.fillRect(cx - Math.floor(8 * scale), mouthY, Math.floor(16 * scale), Math.floor(5 * scale));
-    } else if (feat === 'BALD') {
-      gfx.lineStyle(1, COLORS.PRIMARY, 0.3);
-      gfx.strokeRect(cx - hw, headY, hw * 2, 1);
-    } else if (feat === 'SCAR') {
+    } else if (facialHair === 'mustache') {
+      gfx.fillStyle(COLORS.DIM, 1);
+      gfx.fillRect(cx - Math.floor(6 * scale), mouthY - Math.floor(2 * scale), Math.floor(12 * scale), Math.floor(3 * scale));
+    } else if (facialHair === 'goatee') {
+      gfx.fillStyle(COLORS.DIM, 1);
+      gfx.fillRect(cx - Math.floor(4 * scale), mouthY, Math.floor(8 * scale), Math.floor(4 * scale));
+    }
+
+    // Marker details
+    const marker = this.character.marker;
+    gfx.lineStyle(1, COLORS.PRIMARY, 0.6);
+    if (marker === 'scar') {
       gfx.lineStyle(2, COLORS.DANGER, 0.6);
       gfx.beginPath();
       gfx.moveTo(cx - Math.floor(3 * scale), eyeY - 2);
       gfx.lineTo(cx + Math.floor(1 * scale), eyeY + Math.floor(6 * scale));
       gfx.strokePath();
-    } else if (feat === 'TATTOO') {
-      gfx.lineStyle(1, COLORS.DIM, 0.8);
-      gfx.strokeCircle(cx - Math.floor(6 * scale), eyeY + 4, Math.floor(3 * scale));
-    } else if (feat === 'HEADSET') {
-      // Arc over head + earpiece dot + wire down to chin
+    } else if (marker === 'eyepatch') {
+      gfx.fillStyle(0x000000, 1);
+      gfx.fillRect(cx - hw + 1, eyeY - 1, Math.floor(9 * scale), Math.floor(5 * scale));
+      gfx.lineStyle(1, COLORS.DIM, 1);
+      gfx.strokeRect(cx - hw + 1, eyeY - 1, Math.floor(9 * scale), Math.floor(5 * scale));
+      gfx.beginPath(); gfx.moveTo(cx - hw + 1, eyeY + 1); gfx.lineTo(cx + hw - 1, eyeY + 1); gfx.strokePath();
+    } else if (marker === 'headset') {
       gfx.lineStyle(1, COLORS.PRIMARY, 0.9);
       gfx.beginPath();
       gfx.arc(cx, headY + Math.floor(4 * scale), hw + Math.floor(2 * scale), Math.PI, 0, false);
       gfx.strokePath();
       gfx.fillStyle(COLORS.PRIMARY, 1);
       gfx.fillCircle(cx + hw + Math.floor(2 * scale), eyeY, Math.floor(2 * scale));
-      gfx.lineStyle(1, COLORS.PRIMARY, 0.7);
+    } else if (marker === 'scope') {
+      gfx.lineStyle(1, COLORS.ACCENT, 0.8);
+      gfx.strokeCircle(cx + Math.floor(8 * scale), eyeY + 2, Math.floor(3 * scale));
       gfx.beginPath();
-      gfx.moveTo(cx + hw + Math.floor(2 * scale), eyeY);
-      gfx.lineTo(cx + hw + Math.floor(2 * scale), mouthY);
+      gfx.moveTo(cx + Math.floor(11 * scale), eyeY + 2);
+      gfx.lineTo(cx + hw + 4, eyeY + 2);
       gfx.strokePath();
-    } else if (feat === 'EYE_PATCH') {
-      // Dark filled rectangle over left eye
-      gfx.fillStyle(0x000000, 1);
-      gfx.fillRect(cx - hw + 1, eyeY - 1, Math.floor(9 * scale), Math.floor(5 * scale));
-      gfx.lineStyle(1, COLORS.DIM, 1);
-      gfx.strokeRect(cx - hw + 1, eyeY - 1, Math.floor(9 * scale), Math.floor(5 * scale));
-      // Strap across head
-      gfx.beginPath();
-      gfx.moveTo(cx - hw + 1, eyeY + 1);
-      gfx.lineTo(cx + hw - 1, eyeY + 1);
-      gfx.strokePath();
+    } else if (marker === 'mask') {
+      gfx.fillStyle(0x000000, 0.7);
+      gfx.fillRect(cx - hw + 2, mouthY - Math.floor(4 * scale), (hw - 2) * 2, Math.floor(10 * scale));
+      gfx.lineStyle(1, COLORS.DIM, 0.8);
+      gfx.strokeRect(cx - hw + 2, mouthY - Math.floor(4 * scale), (hw - 2) * 2, Math.floor(10 * scale));
     }
 
-    // Specialty emblem (tiny)
-    const specColor = {
-      INFILTRATION: COLORS.DIM,
-      SNIPER:       COLORS.PRIMARY,
-      DEMOLITIONS:  COLORS.WARNING,
-      INTEL:        COLORS.ACCENT,
-      COMMS:        COLORS.DIM,
-      MEDIC:        COLORS.PRIMARY,
-    }[this.character.specialty] || COLORS.DIM;
-
-    gfx.fillStyle(specColor, 0.4);
+    // Role emblem (small shoulder dot)
+    gfx.fillStyle(COLORS.DIM, 0.4);
     gfx.fillRect(cx - 4, shoulderY, 8, Math.floor(6 * scale));
   }
 
@@ -274,7 +306,6 @@ export class CharacterCard {
       const { cw, ch } = this;
       this._goldBorder.lineStyle(2, 0xffd700, 1);
       this._goldBorder.strokeRect(1, 1, cw - 2, ch - 2);
-      // inner glow line
       this._goldBorder.lineStyle(1, 0xffd700, 0.4);
       this._goldBorder.strokeRect(3, 3, cw - 6, ch - 6);
     }
