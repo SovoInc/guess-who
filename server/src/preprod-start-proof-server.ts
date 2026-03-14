@@ -18,10 +18,9 @@ setLogger(logger);
 setSponsorLogger(logger);
 
 logger.info('Starting proof server...');
-const dockerEnv = new DockerComposeEnvironment(path.resolve(currentDir, '..'), 'proof-server.yml').withWaitStrategy(
-  'proof-server',
-  Wait.forLogMessage('Actix runtime found; starting in Actix runtime', 1),
-);
+const dockerEnv = new DockerComposeEnvironment(path.resolve(currentDir, '..'), 'proof-server.yml')
+  .withWaitStrategy('proof-server', Wait.forLogMessage('Actix runtime found; starting in Actix runtime', 1))
+  .withStartupTimeout(180_000);
 await dockerEnv.up();
 logger.info('Proof server ready');
 

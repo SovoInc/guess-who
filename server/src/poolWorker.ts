@@ -2,17 +2,11 @@ import { randomBytes } from 'crypto';
 import { type Logger } from 'pino';
 import { createOnChainGame, getDustBalance } from './api.js';
 import { addToPool, getPoolSize } from '../../lib/gamePool.js';
+import { enqueuePoolRefill } from './onChainQueue.js';
 
-const TARGET_SIZE = parseInt(process.env.POOL_TARGET_SIZE ?? '5', 10);
+const TARGET_SIZE = parseInt(process.env.POOL_TARGET_SIZE ?? '10', 10);
 const RETRY_DELAY_MS = 5_000;
-
-// Serialize on-chain calls to avoid LevelDB lock contention
-let onChainQueue: Promise<void> = Promise.resolve();
-function enqueueOnChain<T>(fn: () => Promise<T>): Promise<T> {
-  const next = onChainQueue.then(() => fn());
-  onChainQueue = next.then(() => {}, () => {});
-  return next;
-}
+const POLL_INTERVAL_MS = 10_000;
 
 export async function runPoolRefill(
   providers: unknown,
@@ -32,6 +26,10 @@ export async function runPoolRefill(
       }
 
       let size = await getPoolSize();
+      if (size >= TARGET_SIZE) {
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+        continue;
+      }
       while (size < TARGET_SIZE) {
         const culpritId = Math.floor(Math.random() * 16);
         const salt = randomBytes(32).toString('hex');
@@ -39,7 +37,7 @@ export async function runPoolRefill(
         log.info(`Pool refill: generating game ${index}/${TARGET_SIZE} (culpritId=${culpritId})`);
         try {
           const privateState = { culpritId, salt: hexToBytes(salt) };
-          const onChain = await enqueueOnChain(() =>
+          const onChain = await enqueuePoolRefill(() =>
             createOnChainGame(providers, contractAddress, privateState)
           );
           await addToPool({

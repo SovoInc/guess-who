@@ -48,13 +48,13 @@ export class ResultScene extends Phaser.Scene {
 
     if (cpuWon) {
       lines.push({ text: 'CPU IDENTIFIED YOUR SPY!', color: '#ff4444' });
-      lines.push({ text: spy ? spy.codename : 'UNKNOWN', color: '#ff4444', large: true });
+      lines.push({ text: spy ? spy.name : 'UNKNOWN', color: '#ff4444', large: true });
       lines.push({ text: 'BETTER LUCK NEXT TIME, AGENT', color: '#ff6600' });
     } else if (won) {
       lines.push({ text: 'OPERATIVE IDENTIFIED:', color: '#00aa22' });
-      lines.push({ text: spy ? spy.codename : 'UNKNOWN', color: '#00ff41', large: true });
+      lines.push({ text: spy ? spy.name : 'UNKNOWN', color: '#00ff41', large: true });
       lines.push({ text: '', color: '#00aa22' });
-      lines.push({ text: 'ZK PROOF VERIFIED ON GHOST CYPHER', color: '#00aa22' });
+      lines.push({ text: 'ZK PROOF VERIFIED ON PROOF OF SPY', color: '#00aa22' });
       if (proof?.hash) {
         const hashShort = proof.hash.slice(0, 26) + '...';
         lines.push({ text: `HASH: ${hashShort}`, color: '#006622' });
@@ -62,9 +62,9 @@ export class ResultScene extends Phaser.Scene {
     } else {
       lines.push({ text: spy ? 'THE SPY WAS:' : 'TIME EXPIRED', color: '#ff4444' });
       if (spy) {
-        lines.push({ text: spy.codename, color: '#ff4444', large: true });
-        lines.push({ text: `${spy.rank} | ${spy.specialty} | ${spy.origin}`, color: '#aa2200' });
-        lines.push({ text: `FEATURE: ${spy.feature}`, color: '#aa2200' });
+        lines.push({ text: spy.name, color: '#ff4444', large: true });
+        lines.push({ text: `${spy.rank} | ${spy.role}`, color: '#aa2200' });
+        lines.push({ text: `${spy.headwear !== 'none' ? spy.headwear.toUpperCase() : spy.hairShape.toUpperCase()} | ${spy.eyewear !== 'none' ? spy.eyewear.toUpperCase() : 'NO EYEWEAR'} | MARKER: ${spy.marker.toUpperCase()}`, color: '#aa2200' });
       }
     }
 

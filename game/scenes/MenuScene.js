@@ -1,11 +1,11 @@
 import * as Phaser from 'phaser';
 import { COLORS, GAME_WIDTH, GAME_HEIGHT } from '../constants.js';
 import { applyCRTOverlay, addFlickerTween } from '../utils/crt.js';
-import { startSession, getScores } from '../api.js';
+import { startSession, getScores, getNetworkStatus } from '../api.js';
 import { getAddress, connectLace } from '../wallet.js';
 import { SoundSynth } from '../audio/SoundSynth.js';
 
-const MENU_ITEMS = ['START MISSION', 'HIGH SCORES', 'ABOUT', 'ABORT'];
+const MENU_ITEMS = ['START MISSION', 'HIGH SCORES', 'ABOUT'];
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -17,6 +17,33 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    // Crosshair cursor — injected as a style tag to override Phaser's useHandCursor
+    // Pixel art crosshair — blocky squares, no anti-aliasing
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48' shape-rendering='crispEdges'>`
+      + `<rect x='22' y='2' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='22' y='8' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='22' y='14' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='22' y='30' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='22' y='36' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='22' y='42' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='2' y='22' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='8' y='22' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='14' y='22' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='30' y='22' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='36' y='22' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='42' y='22' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='18' y='18' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='26' y='18' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='18' y='26' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='26' y='26' width='4' height='4' fill='%2300ff41'/>`
+      + `<rect x='22' y='22' width='4' height='4' fill='%2300ff41'/>`
+      + `</svg>`;
+    const cursorUrl = `url("data:image/svg+xml,${svg}") 24 24, crosshair`;
+    this._cursorStyle = document.createElement('style');
+    this._cursorStyle.id = 'menu-crosshair';
+    this._cursorStyle.textContent = `canvas { cursor: ${cursorUrl} !important; }`;
+    document.head.appendChild(this._cursorStyle);
+
     if (!this.registry.get('sound')) {
       this.registry.set('sound', new SoundSynth());
     }
@@ -33,7 +60,7 @@ export class MenuScene extends Phaser.Scene {
     for (let y = 0; y < GAME_HEIGHT; y += 80) gridGfx.lineBetween(0, y, GAME_WIDTH, y);
 
     // Title
-    const title = this.add.text(GAME_WIDTH / 2, 160, 'GHOST\nCYPHER', {
+    const title = this.add.text(GAME_WIDTH / 2, 160, 'PROOF OF SPY', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '36px',
       color: '#00ff41',
@@ -52,6 +79,7 @@ export class MenuScene extends Phaser.Scene {
 
     // ── Top-right wallet connect button ──
     this._buildWalletButton();
+    this._buildNetworkStatus();
 
     // If address is in session but wallet not in memory (e.g. after page refresh), auto-reconnect
     if (getAddress() && !window.__midnightConnectedApi) {
@@ -98,7 +126,7 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-ENTER', () => this._select());
 
     // Version footer
-    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 24, 'GHOST CYPHER ZK PROOF DEMO — v1.0.0', {
+    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 24, 'PROOF OF SPY ZK PROOF DEMO — v1.0.0', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '6px',
       color: '#00aa22',
@@ -116,23 +144,128 @@ export class MenuScene extends Phaser.Scene {
     if (this._walletBtnBg) this._walletBtnBg.destroy();
 
     if (addr) {
-      const label = `${addr.slice(0, 6)}...${addr.slice(-6)}`;
+      const label = `${addr.slice(0, 8)}...${addr.slice(-8)}`;
       const t = this.add.text(GAME_WIDTH - PAD, PAD, `◈ ${label}`, {
         fontFamily: "'Press Start 2P', monospace",
-        fontSize: '7px',
+        fontSize: '11px',
         color: '#00ff41',
       }).setOrigin(1, 0).setDepth(10);
       this._walletBtn = t;
     } else {
       const t = this.add.text(GAME_WIDTH - PAD, PAD, '[ CONNECT WALLET ]', {
         fontFamily: "'Press Start 2P', monospace",
-        fontSize: '7px',
+        fontSize: '11px',
         color: '#00aa22',
       }).setOrigin(1, 0).setDepth(10).setInteractive({ useHandCursor: true });
       t.on('pointerover', () => t.setColor('#00ff41'));
       t.on('pointerout',  () => t.setColor('#00aa22'));
       t.on('pointerdown', () => this._connectWallet());
       this._walletBtn = t;
+    }
+  }
+
+  _buildNetworkStatus() {
+    if (this._netStatusGroup) {
+      this._netStatusGroup.forEach(o => o.destroy());
+    }
+    this._netStatusGroup = [];
+    this._netDropdownOpen = false;
+
+    const PAD = 20;
+    const btnY = 52;
+
+    // "NETWORK ▾" toggle button
+    const btn = this.add.text(GAME_WIDTH - PAD, btnY, 'NETWORK ▾', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '8px',
+      color: '#ff4444',
+    }).setOrigin(1, 0).setDepth(10).setInteractive({ useHandCursor: true });
+
+    btn.on('pointerover', () => btn.setAlpha(0.75));
+    btn.on('pointerout',  () => btn.setAlpha(1));
+    btn.on('pointerdown', () => this._toggleNetworkDropdown(btn));
+
+    this._netStatusGroup.push(btn);
+    this._netStatusBtn = btn;
+
+    // Kick off a status check immediately
+    this._refreshNetworkStatus();
+  }
+
+  async _refreshNetworkStatus() {
+    try {
+      const status = await getNetworkStatus();
+      this._lastNetStatus = status;
+      const allOk = status.gameServer && status.proofServer && status.node && status.indexer;
+      if (this._netStatusBtn) {
+        this._netStatusBtn.setColor(allOk ? '#00ff41' : '#ff8800');
+      }
+      if (this._netDropdownOpen) {
+        this._renderDropdown();
+      }
+    } catch {
+      this._lastNetStatus = { gameServer: false, proofServer: false, node: false, indexer: false };
+      if (this._netStatusBtn) this._netStatusBtn.setColor('#ff4444');
+      if (this._netDropdownOpen) this._renderDropdown();
+    }
+  }
+
+  _toggleNetworkDropdown(btn) {
+    if (this._netDropdownOpen) {
+      this._closeNetworkDropdown();
+      btn.setColor('#00aa22');
+    } else {
+      this._netDropdownOpen = true;
+      btn.setColor('#00ff41');
+      this._renderDropdown();
+      this._refreshNetworkStatus();
+    }
+  }
+
+  _renderDropdown() {
+    // Remove old dropdown objects
+    if (this._dropdownObjs) this._dropdownObjs.forEach(o => o.destroy());
+    this._dropdownObjs = [];
+
+    const PAD = 20;
+    const startY = 72;
+    const status = this._lastNetStatus || {};
+    const items = [
+      { label: 'GAME SERVER',  key: 'gameServer' },
+      { label: 'PROOF SERVER', key: 'proofServer' },
+      { label: 'NODE',         key: 'node' },
+      { label: 'INDEXER',      key: 'indexer' },
+    ];
+
+    const panelW = 200;
+    const panelH = items.length * 22 + 16;
+    const panelX = GAME_WIDTH - PAD - panelW;
+
+    const bg = this.add.graphics().setDepth(20);
+    bg.fillStyle(0x001a00, 0.97);
+    bg.fillRect(panelX, startY, panelW, panelH);
+    bg.lineStyle(1, 0x00aa22, 1);
+    bg.strokeRect(panelX, startY, panelW, panelH);
+    this._dropdownObjs.push(bg);
+
+    items.forEach(({ label, key }, i) => {
+      const ok = status[key];
+      const dot = ok ? '● ' : '○ ';
+      const color = ok ? '#00ff41' : '#ff4444';
+      const t = this.add.text(panelX + 10, startY + 8 + i * 22, `${dot}${label}`, {
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: '7px',
+        color,
+      }).setDepth(21);
+      this._dropdownObjs.push(t);
+    });
+  }
+
+  _closeNetworkDropdown() {
+    this._netDropdownOpen = false;
+    if (this._dropdownObjs) {
+      this._dropdownObjs.forEach(o => o.destroy());
+      this._dropdownObjs = [];
     }
   }
 
@@ -169,7 +302,6 @@ export class MenuScene extends Phaser.Scene {
       case 0: this._startMission(); break;
       case 1: this._showHighScores(); break;
       case 2: this._showAbout(); break;
-      case 3: this._abort(); break;
     }
   }
 
@@ -217,12 +349,12 @@ export class MenuScene extends Phaser.Scene {
       const startBtn = this.menuTexts[0];
       startBtn.setColor('#00aa22');
       startBtn.setInteractive({ useHandCursor: true });
-      startBtn.on('pointerover', () => {
+      startBtn.off('pointerover').on('pointerover', () => {
         this.selectedIndex = 0;
         this._updateSelection();
         if (this.sound) this.sound.menuSelect();
       });
-      startBtn.on('pointerdown', () => this._select());
+      startBtn.off('pointerdown').on('pointerdown', () => this._select());
       this.selectedIndex = 0;
       this._updateSelection();
     } catch (e) {
@@ -289,7 +421,7 @@ export class MenuScene extends Phaser.Scene {
     this._closeOverlay();
     this._openOverlay('ABOUT', (panel, startY) => {
       const lines = [
-        'GHOST CYPHER',
+        'PROOF OF SPY',
         '',
         'IDENTIFY THE HIDDEN SPY AMONG',
         '16 MILITARY OPERATIVES USING',
@@ -307,10 +439,10 @@ export class MenuScene extends Phaser.Scene {
         'POWERED BY MIDNIGHT NETWORK',
       ];
       lines.forEach((line, i) => {
-        this.add.text(panel.x + 16, startY + i * 18, line, {
+        this.add.text(panel.x + 16, startY + i * 22, line, {
           fontFamily: "'Press Start 2P', monospace",
-          fontSize: '6px',
-          color: line.startsWith('CONTROLS') ? '#00ff41' : '#00aa22',
+          fontSize: '9px',
+          color: line.startsWith('CONTROLS') || line === 'PROOF OF SPY' ? '#00ff41' : '#00aa22',
         });
       });
     });
@@ -343,11 +475,15 @@ export class MenuScene extends Phaser.Scene {
 
   _openOverlay(title, buildContent) {
     this._closeOverlay();
+    this._closeNetworkDropdown();
     this.menuReady = false;
 
     const pw = 700, ph = 400;
     const px = (GAME_WIDTH - pw) / 2;
     const py = (GAME_HEIGHT - ph) / 2;
+
+    // Use a container so everything is destroyed together
+    const container = this.add.container(0, 0);
 
     const bg = this.add.graphics();
     bg.fillStyle(COLORS.PANEL_BG, 0.97);
@@ -361,32 +497,48 @@ export class MenuScene extends Phaser.Scene {
       const dy = i < 2 ? s : -s;
       bg.beginPath(); bg.moveTo(cx+dx, cy); bg.lineTo(cx, cy); bg.lineTo(cx, cy+dy); bg.strokePath();
     });
+    container.add(bg);
 
     const titleText = this.add.text(px + pw / 2, py + 16, `[ ${title} ]`, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '10px',
       color: '#00ff41',
     }).setOrigin(0.5, 0);
+    container.add(titleText);
 
+    // Proxy add.text so content objects go into the container
+    const origAddText = this.add.text.bind(this.add);
+    this.add.text = (...args) => {
+      const t = origAddText(...args);
+      container.add(t);
+      return t;
+    };
     buildContent({ x: px, y: py, w: pw, h: ph }, py + 46);
+    this.add.text = origAddText;
 
     const closeBtn = this.add.text(px + pw - 16, py + 12, 'X', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '9px',
       color: '#00aa22',
     }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
+    container.add(closeBtn);
     closeBtn.on('pointerover', () => closeBtn.setColor('#ff4444'));
     closeBtn.on('pointerout',  () => closeBtn.setColor('#00aa22'));
     closeBtn.on('pointerdown', () => { this._closeOverlay(); this.menuReady = true; });
 
-    this.overlay = { bg, titleText, closeBtn };
+    this.overlay = { container };
+  }
+
+  shutdown() {
+    if (this._cursorStyle) {
+      this._cursorStyle.remove();
+      this._cursorStyle = null;
+    }
   }
 
   _closeOverlay() {
     if (this.overlay) {
-      this.overlay.bg.destroy();
-      this.overlay.titleText.destroy();
-      this.overlay.closeBtn.destroy();
+      this.overlay.container.destroy(true);
       this.overlay = null;
     }
     if (this._tempMsg) {
