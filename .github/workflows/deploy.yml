@@ -74,10 +74,10 @@ EOF
             package.json ec2-user@${EC2_HOST}:/opt/proof-of-spy/package.json
 
           # Install deps from workspace root + restart
-          $SSH "cd /opt/proof-of-spy && npm install && sudo systemctl restart proof-of-spy"
+          $SSH 'cd /opt/proof-of-spy && npm install && (pm2 restart proof-of-spy || pm2 start server/ecosystem.config.cjs) && pm2 save'
 
           # Ensure proof server is running
-          $SSH "sudo systemctl is-active proof-server || sudo systemctl start proof-server"
+          $SSH 'sudo systemctl is-active proof-server || sudo systemctl start proof-server'
 
           # Wait for healthy
-          $SSH "sleep 5 && sudo systemctl is-active proof-of-spy && sudo systemctl is-active proof-server"
+          $SSH 'sleep 5 && pm2 status proof-of-spy && sudo systemctl is-active proof-server'
