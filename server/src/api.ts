@@ -313,19 +313,13 @@ const deriveKeysFromSeed = async (seed: string) => {
 const formatBalance = (balance: bigint): string => balance.toLocaleString();
 
 export const withStatus = async <T>(message: string, fn: () => Promise<T>): Promise<T> => {
-  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  let i = 0;
-  const interval = setInterval(() => {
-    process.stdout.write(`\r  ${frames[i++ % frames.length]} ${message}`);
-  }, 80);
+  process.stdout.write(`  … ${message}\n`);
   try {
     const result = await fn();
-    clearInterval(interval);
-    process.stdout.write(`\r  ✓ ${message}\n`);
+    process.stdout.write(`  ✓ ${message}\n`);
     return result;
   } catch (e) {
-    clearInterval(interval);
-    process.stdout.write(`\r  ✗ ${message}\n`);
+    process.stdout.write(`  ✗ ${message}\n`);
     throw e;
   }
 };
