@@ -1,0 +1,83 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build frontend
+        env:
+          VITE_CONTRACT_ADDRESS: ${{ secrets.VITE_CONTRACT_ADDRESS }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          WALLET_SEED: ${{ secrets.WALLET_SEED }}
+          GUESS_WHO_CONTRACT_ADDRESS: ${{ secrets.GUESS_WHO_CONTRACT_ADDRESS }}
+          VITE_CONTRACT_ADDRESS: ${{ secrets.VITE_CONTRACT_ADDRESS }}
+          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+          POOL_TARGET_SIZE: ${{ secrets.POOL_TARGET_SIZE }}
+          PROOF_SERVER_URL: ${{ secrets.PROOF_SERVER_URL }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: |
+          echo "$EC2_SSH_KEY" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          SSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no ec2-user@${EC2_HOST}"
+          SCP="scp -i /tmp/deploy_key -o StrictHostKeyChecking=no"
+
+          # Write fresh .env to server
+          cat > /tmp/server.env << EOF
+VITE_CONTRACT_ADDRESS=${VITE_CONTRACT_ADDRESS}
+VITE_API_URL=${VITE_API_URL}
+WALLET_SEED=${WALLET_SEED}
+GUESS_WHO_CONTRACT_ADDRESS=${GUESS_WHO_CONTRACT_ADDRESS}
+POSTGRES_URL=${POSTGRES_URL}
+POOL_TARGET_SIZE=${POOL_TARGET_SIZE}
+PROOF_SERVER_URL=${PROOF_SERVER_URL}
+EOF
+          $SCP /tmp/server.env ec2-user@${EC2_HOST}:/opt/proof-of-spy/.env
+
+          # Sync frontend build
+          rsync -az -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
+            dist/ ec2-user@${EC2_HOST}:/opt/proof-of-spy/dist/
+
+          # Sync server source
+          rsync -az -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
+            --exclude='node_modules' --exclude='logs' \
+            server/ ec2-user@${EC2_HOST}:/opt/proof-of-spy/server/
+
+          # Sync contract artifacts
+          rsync -az -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
+            contract/ ec2-user@${EC2_HOST}:/opt/proof-of-spy/contract/
+
+          # Sync lib
+          rsync -az -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
+            lib/ ec2-user@${EC2_HOST}:/opt/proof-of-spy/lib/
+
+          # Sync root package.json (needed for workspaces)
+          scp -i /tmp/deploy_key -o StrictHostKeyChecking=no \
+            package.json ec2-user@${EC2_HOST}:/opt/proof-of-spy/package.json
+
+          # Install deps from workspace root + restart
+          $SSH "cd /opt/proof-of-spy && npm install && sudo systemctl restart proof-of-spy"
+
+          # Ensure proof server is running
+          $SSH "sudo systemctl is-active proof-server || sudo systemctl start proof-server"
+
+          # Wait for healthy
+          $SSH "sleep 5 && sudo systemctl is-active proof-of-spy && sudo systemctl is-active proof-server"
