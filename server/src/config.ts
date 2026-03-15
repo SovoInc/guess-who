@@ -58,7 +58,7 @@ export class PreprodConfig implements Config {
   indexer = 'https://indexer.preprod.midnight.network/api/v3/graphql';
   indexerWS = 'wss://indexer.preprod.midnight.network/api/v3/graphql/ws';
   node = 'https://rpc.preprod.midnight.network';
-  proofServer = 'http://127.0.0.1:6300';
+  proofServer = process.env.PROOF_SERVER_URL ?? 'https://lace-proof-pub.preprod.midnight.network';
   constructor() {
     setNetworkId('preprod');
   }

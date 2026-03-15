@@ -6,9 +6,11 @@ let schemaInitPromise: Promise<void> | null = null;
 
 function getPool(): Pool {
   if (!pool) {
-    pool = new Pool({
-      connectionString: process.env.POSTGRES_URL,
-    });
+    const connectionString = process.env.POSTGRES_URL;
+    const ssl = connectionString?.includes('rds.amazonaws.com')
+      ? { rejectUnauthorized: false }
+      : undefined;
+    pool = new Pool({ connectionString, ssl });
   }
   return pool;
 }
