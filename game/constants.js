@@ -132,7 +132,7 @@ export function formatQuestion(category, value) {
     case 'SEX':
       return value === 'F' ? 'Is the target female?' : 'Is the target male?';
     case 'HEADWEAR':
-      if (value === 'none') return 'Is the target bareheaded?';
+      if (value === 'none') return 'Is the target wearing no headwear?';
       if (value === 'helmet') return 'Is the target wearing a combat helmet?';
       if (value === 'cap')    return 'Is the target wearing a cap?';
       if (value === 'beret')  return 'Is the target wearing a beret?';
@@ -147,19 +147,19 @@ export function formatQuestion(category, value) {
       if (value === 'ponytail') return 'Does the target have a ponytail?';
       return `Does the target have ${v} hair?`;
     case 'FACIAL_HAIR':
-      if (value === 'none')     return 'Does the target have no facial hair?';
+      if (value === 'none')     return 'Is the target clean-shaven?';
       if (value === 'mustache') return 'Does the target have a mustache?';
       if (value === 'beard')    return 'Does the target have a beard?';
       if (value === 'goatee')   return 'Does the target have a goatee?';
       return `Does the target have a ${v}?`;
     case 'EYEWEAR':
-      if (value === 'none')    return 'Is the target wearing no eyewear?';
+      if (value === 'none')    return 'Does the target have clear vision?';
       if (value === 'glasses') return 'Is the target wearing glasses?';
       if (value === 'goggles') return 'Is the target wearing goggles?';
       if (value === 'visor')   return 'Is the target wearing a visor?';
       return `Is the target wearing ${v}?`;
     case 'MARKER':
-      if (value === 'none')    return 'Does the target have no visible marker?';
+      if (value === 'none')    return 'Is the target unmarked?';
       if (value === 'scar')    return 'Does the target have a visible scar?';
       if (value === 'patch')   return 'Does the target have a shoulder patch?';
       if (value === 'radio')   return 'Does the target carry a radio?';

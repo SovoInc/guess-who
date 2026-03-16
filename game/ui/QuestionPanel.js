@@ -86,8 +86,8 @@ export class QuestionPanel {
 
     const hit = scene.add.rectangle(x + w / 2, y + h / 2, w, h, 0, 0)
       .setInteractive({ useHandCursor: true });
-    hit.on('pointerover', () => { if (this.pickerVisible) return; drawBtn(true); text.setColor('#ffffff'); if (this.soundSynth) this.soundSynth.menuSelect(); });
-    hit.on('pointerout',  () => { if (this.pickerVisible) return; drawBtn(false); text.setColor('#00ff41'); });
+    hit.on('pointerover', () => { if (this.pickerVisible || this._enemyTurn || this.disabled) return; drawBtn(true); text.setColor('#ffffff'); if (this.soundSynth) this.soundSynth.menuSelect(); });
+    hit.on('pointerout',  () => { if (this.pickerVisible || this._enemyTurn || this.disabled) return; drawBtn(false); text.setColor('#00ff41'); });
     hit.on('pointerdown', () => { if (this.pickerVisible || this.disabled) return; if (this.soundSynth) this.soundSynth.click(); onClick(); });
 
     this.buttons.push({ gfx, text, hit });
