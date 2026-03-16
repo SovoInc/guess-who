@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, GAME_WIDTH, GAME_HEIGHT } from '../constants.js';
 import { applyCRTOverlay, addFlickerTween } from '../utils/crt.js';
-import { startSession, getScores, getNetworkStatus } from '../api.js';
+import { startSession, getScores, getNetworkStatus, getProofServerMode, setProofServerMode } from '../api.js';
 import { getAddress, connectLace } from '../wallet.js';
 import { SoundSynth } from '../audio/SoundSynth.js';
 
@@ -88,7 +88,7 @@ export class MenuScene extends Phaser.Scene {
 
     // Menu items
     this.menuTexts = MENU_ITEMS.map((label, i) => {
-      const disabled = i === 0 && !getAddress();
+      const disabled = this._isDisabled(i);
       const t = this.add.text(GAME_WIDTH / 2, 330 + i * 52, label, {
         fontFamily: "'Press Start 2P', monospace",
         fontSize: '13px',
@@ -115,7 +115,7 @@ export class MenuScene extends Phaser.Scene {
     }).setOrigin(1, 0.5);
 
     // Start with selection on first enabled item
-    this.selectedIndex = getAddress() ? 0 : 1;
+    this.selectedIndex = this._isDisabled(0) ? 1 : 0;
     this._updateSelection();
 
     // Keyboard nav
@@ -190,6 +190,18 @@ export class MenuScene extends Phaser.Scene {
 
     // Kick off a status check immediately
     this._refreshNetworkStatus();
+    this._refreshProofServerMode();
+  }
+
+  async _refreshProofServerMode() {
+    this._proofServerMode = this._proofServerMode ?? 'remote'; // default before fetch
+    try {
+      const { mode } = await getProofServerMode();
+      this._proofServerMode = mode;
+      if (this._netDropdownOpen) this._renderDropdown();
+    } catch {
+      // keep existing value
+    }
   }
 
   async _refreshNetworkStatus() {
@@ -219,6 +231,22 @@ export class MenuScene extends Phaser.Scene {
       btn.setColor('#00ff41');
       this._renderDropdown();
       this._refreshNetworkStatus();
+
+      // Close when clicking anywhere outside the dropdown
+      this._outsideClickHandler = (pointer) => {
+        if (!this._netDropdownOpen) return;
+        // Check if click is within the dropdown panel bounds
+        const PAD = 20;
+        const panelW = 220;
+        const panelX = GAME_WIDTH - PAD - panelW;
+        const startY = 52; // includes the button itself
+        const panelH = 200; // generous height covering all rows
+        if (pointer.x >= panelX && pointer.x <= panelX + panelW + PAD &&
+            pointer.y >= startY && pointer.y <= startY + panelH) return;
+        this._closeNetworkDropdown();
+        btn.setColor('#ff4444');
+      };
+      this.input.on('pointerdown', this._outsideClickHandler);
     }
   }
 
@@ -237,8 +265,10 @@ export class MenuScene extends Phaser.Scene {
       { label: 'INDEXER',      key: 'indexer' },
     ];
 
-    const panelW = 200;
-    const panelH = items.length * 22 + 16;
+    const rowH = 22;
+    const toggleH = 30;
+    const panelW = 220;
+    const panelH = items.length * rowH + toggleH + 24;
     const panelX = GAME_WIDTH - PAD - panelW;
 
     const bg = this.add.graphics().setDepth(20);
@@ -252,13 +282,89 @@ export class MenuScene extends Phaser.Scene {
       const ok = status[key];
       const dot = ok ? '● ' : '○ ';
       const color = ok ? '#00ff41' : '#ff4444';
-      const t = this.add.text(panelX + 10, startY + 8 + i * 22, `${dot}${label}`, {
+      const t = this.add.text(panelX + 10, startY + 8 + i * rowH, `${dot}${label}`, {
         fontFamily: "'Press Start 2P', monospace",
         fontSize: '7px',
         color,
       }).setDepth(21);
       this._dropdownObjs.push(t);
     });
+
+    // Divider
+    const divY = startY + 8 + items.length * rowH + 4;
+    const divGfx = this.add.graphics().setDepth(21);
+    divGfx.lineStyle(1, 0x003300, 1);
+    divGfx.lineBetween(panelX + 6, divY, panelX + panelW - 6, divY);
+    this._dropdownObjs.push(divGfx);
+
+    // Proof server toggle
+    const mode = this._proofServerMode;
+    const toggleY = divY + 6;
+    const isLocal = mode === 'local';
+    const isRemote = mode === 'remote';
+
+    const modeLabel = this.add.text(panelX + 10, toggleY, 'PROOF:', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '6px',
+      color: '#00aa22',
+    }).setDepth(21);
+    this._dropdownObjs.push(modeLabel);
+
+    // LOCAL button
+    const localBtnX = panelX + 70;
+    const localGfx = this.add.graphics().setDepth(21);
+    const drawLocal = (hover) => {
+      localGfx.clear();
+      localGfx.fillStyle(isLocal ? 0x003300 : (hover ? 0x001a00 : 0x000a00), 1);
+      localGfx.fillRect(localBtnX, toggleY - 2, 58, 16);
+      localGfx.lineStyle(1, isLocal ? 0x00ff41 : 0x005500, 1);
+      localGfx.strokeRect(localBtnX, toggleY - 2, 58, 16);
+    };
+    drawLocal(false);
+    const localText = this.add.text(localBtnX + 29, toggleY + 6, 'LOCAL', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '6px',
+      color: isLocal ? '#00ff41' : '#006600',
+    }).setOrigin(0.5, 0.5).setDepth(22);
+    const localHit = this.add.rectangle(localBtnX + 29, toggleY + 6, 58, 16, 0, 0)
+      .setDepth(22).setInteractive({ useHandCursor: true });
+    localHit.on('pointerover', () => { drawLocal(true); });
+    localHit.on('pointerout',  () => { drawLocal(false); });
+    localHit.on('pointerdown', async () => {
+      if (isLocal) return;
+      await setProofServerMode('local').catch(() => {});
+      this._proofServerMode = 'local';
+      this._renderDropdown();
+    });
+    this._dropdownObjs.push(localGfx, localText, localHit);
+
+    // REMOTE button
+    const remoteBtnX = localBtnX + 64;
+    const remoteGfx = this.add.graphics().setDepth(21);
+    const drawRemote = (hover) => {
+      remoteGfx.clear();
+      remoteGfx.fillStyle(isRemote ? 0x003300 : (hover ? 0x001a00 : 0x000a00), 1);
+      remoteGfx.fillRect(remoteBtnX, toggleY - 2, 72, 16);
+      remoteGfx.lineStyle(1, isRemote ? 0x00ff41 : 0x005500, 1);
+      remoteGfx.strokeRect(remoteBtnX, toggleY - 2, 72, 16);
+    };
+    drawRemote(false);
+    const remoteText = this.add.text(remoteBtnX + 36, toggleY + 6, 'REMOTE', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '6px',
+      color: isRemote ? '#00ff41' : '#006600',
+    }).setOrigin(0.5, 0.5).setDepth(22);
+    const remoteHit = this.add.rectangle(remoteBtnX + 36, toggleY + 6, 72, 16, 0, 0)
+      .setDepth(22).setInteractive({ useHandCursor: true });
+    remoteHit.on('pointerover', () => { drawRemote(true); });
+    remoteHit.on('pointerout',  () => { drawRemote(false); });
+    remoteHit.on('pointerdown', async () => {
+      if (isRemote) return;
+      await setProofServerMode('remote').catch(() => {});
+      this._proofServerMode = 'remote';
+      this._renderDropdown();
+    });
+    this._dropdownObjs.push(remoteGfx, remoteText, remoteHit);
   }
 
   _closeNetworkDropdown() {
@@ -266,6 +372,10 @@ export class MenuScene extends Phaser.Scene {
     if (this._dropdownObjs) {
       this._dropdownObjs.forEach(o => o.destroy());
       this._dropdownObjs = [];
+    }
+    if (this._outsideClickHandler) {
+      this.input.off('pointerdown', this._outsideClickHandler);
+      this._outsideClickHandler = null;
     }
   }
 

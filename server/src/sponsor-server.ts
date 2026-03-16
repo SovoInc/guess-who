@@ -259,7 +259,27 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
       check('indexer', config.indexer),
     ]);
 
-    res.json({ gameServer: true, proofServer: proofServer.ok, node: node.ok, indexer: indexer.ok });
+    res.json({ gameServer: true, proofServer: proofServer.ok, node: node.ok, indexer: indexer.ok, proofServerUrl: config.proofServer });
+  });
+
+  const LOCAL_PROOF_URL = 'http://localhost:6300';
+  const REMOTE_PROOF_URL = 'https://lace-proof-pub.preprod.midnight.network';
+
+  app.get('/api/proof-server', (_req, res) => {
+    const url = config.proofServer;
+    const mode = url.includes('localhost') || url.includes('127.0.0.1') ? 'local' : 'remote';
+    res.json({ url, mode });
+  });
+
+  app.post('/api/proof-server', (req, res) => {
+    const { mode } = req.body as { mode: 'local' | 'remote' };
+    if (mode !== 'local' && mode !== 'remote') {
+      res.status(400).json({ error: 'mode must be local or remote' });
+      return;
+    }
+    (config as any).proofServer = mode === 'local' ? LOCAL_PROOF_URL : REMOTE_PROOF_URL;
+    logger.info(`Proof server switched to ${mode}: ${config.proofServer}`);
+    res.json({ url: config.proofServer, mode });
   });
 
   app.get('/api/dust', async (_req, res) => {

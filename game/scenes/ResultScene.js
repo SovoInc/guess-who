@@ -18,6 +18,17 @@ export class ResultScene extends Phaser.Scene {
     this.sound = this.registry.get('sound');
     this.cameras.main.fadeIn(600, 0, 0, 0);
 
+    // Fade out theme music on result screen
+    const themeMusic = this.registry.get('themeMusic');
+    if (themeMusic && themeMusic.isPlaying) {
+      this.tweens.add({
+        targets: themeMusic,
+        volume: 0,
+        duration: 2000,
+        onComplete: () => { themeMusic.stop(); this.registry.remove('themeMusic'); },
+      });
+    }
+
     const { won, spy, score, questionsUsed, timeElapsed, proof } = this.resultData;
 
     // Background

@@ -35,6 +35,22 @@ export async function getNetworkStatus() {
   return res.json(); // { proofServer: bool, node: bool, indexer: bool }
 }
 
+export async function getProofServerMode() {
+  const res = await fetch(`${BASE}/api/proof-server`);
+  if (!res.ok) throw new Error('Failed to get proof server mode');
+  return res.json(); // { url, mode: 'local' | 'remote' }
+}
+
+export async function setProofServerMode(mode) {
+  const res = await fetch(`${BASE}/api/proof-server`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  });
+  if (!res.ok) throw new Error('Failed to set proof server mode');
+  return res.json();
+}
+
 export async function getScores() {
   const res = await fetch(`${BASE}/api/scores`);
   if (!res.ok) throw new Error('Failed to get scores');

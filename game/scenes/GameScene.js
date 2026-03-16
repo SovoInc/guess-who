@@ -3,7 +3,7 @@ import {
   COLORS, CHARACTERS, GAME_WIDTH, GAME_HEIGHT,
   CARD_W, CARD_H, CARD_GAP, GRID_X, GRID_Y,
   SIDEBAR_X, SIDEBAR_W, MAX_QUESTIONS, TIMER_SECONDS,
-  QUESTION_CATEGORIES, formatQuestion,
+  QUESTION_CATEGORIES, formatQuestion, ROSTER_FRAME,
 } from '../constants.js';
 import { applyCRTOverlay } from '../utils/crt.js';
 import { CharacterCard } from '../ui/CharacterCard.js';
@@ -43,6 +43,15 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
+  preload() {
+    if (!this.textures.exists('roster')) {
+      this.load.spritesheet('roster', '/assets/roster.png', { frameWidth: 96, frameHeight: 96 });
+    }
+    if (!this.textures.exists('unknown')) {
+      this.load.image('unknown', '/assets/unknown.jpg');
+    }
+  }
+
   init(data) {
     this.sessionId = data.sessionId;
     this.walletAddress = data.walletAddress;
@@ -61,6 +70,16 @@ export class GameScene extends Phaser.Scene {
 
     // Assign the player a random spy the CPU must find
     this.playerSpyId = Math.floor(Math.random() * 16);
+
+    // In dev mode: assign a local CPU spy (the one the player must find)
+    // In prod: the server owns the culprit secretly
+    if (data.sessionId === 'dev-session') {
+      let devSpyId;
+      do { devSpyId = Math.floor(Math.random() * 16); } while (devSpyId === this.playerSpyId);
+      this._devCpuSpyId = devSpyId;
+    } else {
+      this._devCpuSpyId = null;
+    }
 
     // CPU state
     this.cpu = {
@@ -97,12 +116,16 @@ export class GameScene extends Phaser.Scene {
     this._buildCpuBoard();
     this._buildPlayerDialogBox();
 
+    // Question panel sits in sidebar under the codec box
     this.questionPanel = new QuestionPanel(
       this,
       (category, value) => this._onQuestion(category, value),
       this.sound,
       L.gameW,
       L.gameH,
+      L.colX,
+      L.colW,
+      this._questionPanelY,
     );
 
     this._startTimer();
@@ -144,12 +167,14 @@ export class GameScene extends Phaser.Scene {
     const gameH = this.scale.height;
 
     const hudH    = 50;
-    const qBarH   = 50;
+    const qBarH   = 0;  // question buttons moved to sidebar
     const gridX   = 20;
     const gridY   = hudH + 8;
-    const cardW   = CARD_W;
-    const cardH   = CARD_H;
+    // Cards sized to fill available height: 4 rows + 3 gaps fit in gameH - gridY - 8
+    const availH  = gameH - gridY - 8;
     const cardGap = CARD_GAP;
+    const cardH   = Math.floor((availH - 3 * cardGap) / 4);
+    const cardW   = Math.floor(cardH * (CARD_W / CARD_H));
 
     const gridW   = 4 * cardW + 3 * cardGap;
     const gridH   = 4 * cardH + 3 * cardGap;
@@ -265,6 +290,7 @@ export class GameScene extends Phaser.Scene {
 
   _buildCards() {
     const { gridX, gridY, cardW, cardH, cardGap } = this._L;
+
     this.cards = [];
     this.characters.forEach((char, i) => {
       const col = i % 4;
@@ -322,23 +348,27 @@ export class GameScene extends Phaser.Scene {
     const GAP = 8;
     const colBottom = gameH - qBarH - 4; // above question bar
 
-    // 1. Dialog box: 116px tall, built in _buildPlayerDialogBox using _sidebarDialogY
-    const dialogH = 116;
+    // 1. Dialog box (codec): built in _buildPlayerDialogBox using _sidebarDialogY
+    const dialogH = 190;
     this._sidebarDialogY = colY;
 
-    // 2. Network window below dialog
-    const netWinY = colY + dialogH + GAP;
-    const netWinH = 160;
+    // 2. Question panel sits directly under the codec box
+    const qPanelH = 104; // 2 rows × 44px + gap + padding
+    this._questionPanelY = colY + dialogH + GAP;
+
+    // 3. Network window below question panel
+    const netWinY = this._questionPanelY + qPanelH + GAP;
+    const netWinH = 120;
     this.networkWindow = new NetworkWindow(this, netWinY, netWinH, colX, colW);
     this.networkWindow.log('SECURE CHANNEL OPEN', '#00ff41');
     this.networkWindow.log(`SESSION: ${this.sessionId.slice(0, 16)}...`, '#00cc33');
 
-    // 3. Declare button pinned to bottom of column
+    // 4. Declare button pinned to bottom of column
     const declareH = 40;
     const declareY = colBottom - declareH;
     this._buildDeclareButton(colX, declareY, colW);
 
-    // 4. CPU board fills the gap between network window and declare button
+    // 5. CPU board fills the gap between network window and declare button
     this._cpuBoardTopY = netWinY + netWinH + GAP;
     this._cpuBoardMaxH = declareY - GAP - this._cpuBoardTopY;
   }
@@ -492,7 +522,9 @@ export class GameScene extends Phaser.Scene {
 
   _buildPlayerDialogBox() {
     const bw = this._L.colW;
-    const bh = 116;
+    // MGS-style codec: 100px portrait area + text lines + YES/NO row + verify bar + padding
+    const portraitH = 100;
+    const bh = 190;
     const bx = this._L.colX;
     const by = this._sidebarDialogY;
 
@@ -501,59 +533,127 @@ export class GameScene extends Phaser.Scene {
     this._dialogW = bw;
     this._dialogH = bh;
 
-    const D = 5; // base depth for dialog elements
+    // Layout constants
+    const PORTRAIT_W = 80; // left portrait panel width
+    const CENTER_W = bw - PORTRAIT_W * 2; // center freq/bars panel
+    const CENTER_X = bx + PORTRAIT_W; // center panel start x
+    const RIGHT_X = bx + bw - PORTRAIT_W; // right portrait start x
 
-    // Static frame (never redrawn)
+    const D = 5;
+
+    // ── Static frame ─────────────────────────────────────────────────────
     this.dialogGfx = this.add.graphics().setDepth(D);
     this._drawDialogFrame();
 
-    // Left panel: avatar area — redrawn when radio switches
+    // ── Left portrait panel (speaker) ─────────────────────────────────
     this.dialogAvatarGfx = this.add.graphics().setDepth(D + 1);
+    // Sprite image for left portrait (roster spritesheet)
+    this._dialogLeftImg = null;
+    // ── Right portrait panel (listener) ───────────────────────────────
+    this.dialogAvatarRightGfx = this.add.graphics().setDepth(D + 1);
+    this._dialogRightImg = null;
 
-    // Name badge above dialog (updated on radio switch)
-    this.dialogNameBadge = this.add.text(bx + 4, by - 14, '', {
+    // ── Center panel: FREQ label + PTT + audio bars ────────────────────
+    const centerGfx = this.add.graphics().setDepth(D + 1);
+    // Subtle center bg
+    centerGfx.fillStyle(0x000e00, 1);
+    centerGfx.fillRect(CENTER_X + 1, by + 1, CENTER_W - 2, portraitH - 2);
+
+    // PTT label at top-center
+    this.add.text(CENTER_X + CENTER_W / 2, by + 5, 'PTT', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '7px',
-      color: '#00ff41',
-    }).setDepth(D + 1);
+      fontSize: '5px',
+      color: '#005514',
+    }).setOrigin(0.5, 0).setDepth(D + 1);
 
-    // Right panel text lines
-    this.dialogLine1 = this.add.text(bx + 70, by + 10, '', {
+    // Thin horizontal decorative lines
+    const lineGfx = this.add.graphics().setDepth(D + 1);
+    lineGfx.lineStyle(1, COLORS.DIM, 0.7);
+    lineGfx.beginPath(); lineGfx.moveTo(CENTER_X + 2, by + 15); lineGfx.lineTo(CENTER_X + CENTER_W - 2, by + 15); lineGfx.strokePath();
+    lineGfx.beginPath(); lineGfx.moveTo(CENTER_X + 2, by + portraitH - 15); lineGfx.lineTo(CENTER_X + CENTER_W - 2, by + portraitH - 15); lineGfx.strokePath();
+
+    // FREQ text
+    this.add.text(CENTER_X + CENTER_W / 2, by + 20, 'FREQ', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '5px',
+      color: '#004400',
+    }).setOrigin(0.5, 0).setDepth(D + 1);
+
+    this.add.text(CENTER_X + CENTER_W / 2, by + 30, '140.85', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '8px',
+      color: '#00ff41',
+    }).setOrigin(0.5, 0).setDepth(D + 2);
+
+    // Audio bars graphics — 5 vertical bars in center panel
+    this._audioBarsGfx = this.add.graphics().setDepth(D + 2);
+    this._audioBarsActive = 'left'; // which side is speaking ('left' or 'right')
+    this._drawAudioBars(true);
+
+    // Repeating timer to animate audio bars
+    this._audioBarsTimer = this.time.addEvent({
+      delay: 150,
+      loop: true,
+      callback: () => this._drawAudioBars(false),
+    });
+
+    // Speaker name badges — left and right
+    this.dialogNameBadge = this.add.text(bx + PORTRAIT_W / 2, by + portraitH + 2, '', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '6px',
       color: '#00ff41',
-      wordWrap: { width: bw - 74 },
+      align: 'center',
+    }).setOrigin(0.5, 0).setDepth(D + 1);
+
+    this._dialogRightNameBadge = this.add.text(RIGHT_X + PORTRAIT_W / 2, by + portraitH + 2, '', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '6px',
+      color: '#444444',
+      align: 'center',
+    }).setOrigin(0.5, 0).setDepth(D + 1);
+
+    // Question text line — below the portrait row (spans full width)
+    const textY = by + portraitH + 14;
+    this.dialogLine1 = this.add.text(bx + 4, textY, '', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '6px',
+      color: '#005514',
+      wordWrap: { width: bw - 8 },
     }).setDepth(D + 1);
-    this.dialogLine2 = this.add.text(bx + 70, by + 26, '', {
+
+    this.dialogLine2 = this.add.text(bx + 4, textY + 12, '', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '7px',
       color: '#39ff14',
-      wordWrap: { width: bw - 74 },
+      wordWrap: { width: bw - 8 },
     }).setDepth(D + 1);
-    this.dialogLine3 = this.add.text(bx + 70, by + 50, '', {
+
+    // dialogLine3 — third text line, capped above the YES/NO button row
+    this.dialogLine3 = this.add.text(bx + 4, textY + 24, '', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '6px',
       color: '#00aa22',
-      wordWrap: { width: bw - 74 },
+      wordWrap: { width: bw - 8 },
     }).setDepth(D + 1);
 
-    // Chain verify bar — progress track + fill
+    // Chain verify bar — sits below question text
+    const verifyY = by + bh - 22;
     this.dialogVerifyBarBg = this.add.graphics().setDepth(D + 1);
     this.dialogVerifyBarBg.fillStyle(0x001a00, 1);
-    this.dialogVerifyBarBg.fillRect(bx + 70, by + 72, bw - 78, 8);
+    this.dialogVerifyBarBg.fillRect(bx + 4, verifyY, bw - 8, 7);
     this.dialogVerifyBarBg.lineStyle(1, COLORS.DIM, 1);
-    this.dialogVerifyBarBg.strokeRect(bx + 70, by + 72, bw - 78, 8);
+    this.dialogVerifyBarBg.strokeRect(bx + 4, verifyY, bw - 8, 7);
 
     this.dialogVerifyBarFill = this.add.graphics().setDepth(D + 2);
 
-    this.dialogVerifyLabel = this.add.text(bx + 70, by + 84, '', {
+    this.dialogVerifyLabel = this.add.text(bx + 4, verifyY + 9, '', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '5px',
       color: '#00aa22',
     }).setDepth(D + 1);
 
-    // Result stamp (hidden until chain resolves)
-    this.dialogResultStamp = this.add.text(bx + bw - 8, by + 68, '', {
+    // Result stamp
+    this.dialogResultStamp = this.add.text(bx + bw - 8, verifyY - 2, '', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '9px',
       color: '#00ff41',
@@ -564,17 +664,62 @@ export class GameScene extends Phaser.Scene {
     this._setDialogIdle();
   }
 
+  // Draw the 5 audio bars in the center panel
+  _drawAudioBars(reset) {
+    const bx = this._dialogX;
+    const by = this._dialogY;
+    const bw = this._dialogW;
+    const PORTRAIT_W = 80;
+    const CENTER_X = bx + PORTRAIT_W;
+    const CENTER_W = bw - PORTRAIT_W * 2;
+
+    if (!this._audioBarsGfx || !this._audioBarsGfx.scene) return;
+    const gfx = this._audioBarsGfx;
+    gfx.clear();
+
+    const barCount = 5;
+    const barW = 4;
+    const maxH = 20;
+    const barSpacing = Math.floor((CENTER_W - barCount * barW) / (barCount + 1));
+    const baseY = by + 70;
+    const activeLeft = this._audioBarsActive === 'left';
+
+    for (let i = 0; i < barCount; i++) {
+      const bX = CENTER_X + barSpacing + i * (barW + barSpacing);
+      // Active side gets taller bars on random frames; idle side very short
+      const isActiveSide = true; // all bars in center respond to speaker
+      const maxBarH = activeLeft
+        ? (i < 3 ? maxH : maxH * 0.5)   // left speaking: taller on left bars
+        : (i > 1 ? maxH : maxH * 0.5);  // right speaking: taller on right bars
+
+      const h = reset ? 4 : Math.max(3, Math.floor(Math.random() * maxBarH));
+      const alpha = activeLeft ? (i < 3 ? 0.9 : 0.4) : (i > 1 ? 0.9 : 0.4);
+      gfx.fillStyle(COLORS.PRIMARY, alpha);
+      gfx.fillRect(bX, baseY - h, barW, h);
+      // Bright cap
+      gfx.fillStyle(COLORS.ACCENT, 0.8);
+      gfx.fillRect(bX, baseY - h, barW, 1);
+    }
+  }
+
   _drawDialogFrame() {
     const { _dialogX: bx, _dialogY: by, _dialogW: bw, _dialogH: bh } = this;
+    const PORTRAIT_W = 80;
+    const CENTER_X = bx + PORTRAIT_W;
+    const CENTER_W = bw - PORTRAIT_W * 2;
+    const portraitH = 100;
     const gfx = this.dialogGfx;
     gfx.clear();
 
+    // Main background
     gfx.fillStyle(0x010a01, 0.97);
     gfx.fillRect(bx, by, bw, bh);
+
+    // Outer border
     gfx.lineStyle(2, COLORS.PRIMARY, 1);
     gfx.strokeRect(bx, by, bw, bh);
-    gfx.lineStyle(1, COLORS.DIM, 0.5);
-    gfx.strokeRect(bx + 3, by + 3, bw - 6, bh - 6);
+    gfx.lineStyle(1, COLORS.DIM, 0.4);
+    gfx.strokeRect(bx + 2, by + 2, bw - 4, bh - 4);
 
     // Corner ticks
     const s = 8;
@@ -584,102 +729,123 @@ export class GameScene extends Phaser.Scene {
     gfx.beginPath(); gfx.moveTo(bx,      by+bh-s); gfx.lineTo(bx,      by+bh  ); gfx.lineTo(bx + s,     by+bh  ); gfx.strokePath();
     gfx.beginPath(); gfx.moveTo(bx+bw-s, by+bh  ); gfx.lineTo(bx+bw,   by+bh  ); gfx.lineTo(bx + bw,   by+bh-s); gfx.strokePath();
 
-    // Avatar / text divider
-    gfx.lineStyle(1, COLORS.DIM, 0.5);
-    gfx.beginPath();
-    gfx.moveTo(bx + 64, by + 6);
-    gfx.lineTo(bx + 64, by + bh - 6);
-    gfx.strokePath();
+    // Portrait panel separators (left portrait | center | right portrait)
+    gfx.lineStyle(1, COLORS.DIM, 0.6);
+    gfx.beginPath(); gfx.moveTo(bx + PORTRAIT_W, by + 2); gfx.lineTo(bx + PORTRAIT_W, by + portraitH); gfx.strokePath();
+    gfx.beginPath(); gfx.moveTo(bx + bw - PORTRAIT_W, by + 2); gfx.lineTo(bx + bw - PORTRAIT_W, by + portraitH); gfx.strokePath();
+
+    // Horizontal divider below portrait row
+    gfx.lineStyle(1, COLORS.PRIMARY, 0.5);
+    gfx.beginPath(); gfx.moveTo(bx + 2, by + portraitH); gfx.lineTo(bx + bw - 2, by + portraitH); gfx.strokePath();
+
+    // Left portrait panel background
+    gfx.fillStyle(0x000a00, 1);
+    gfx.fillRect(bx + 2, by + 2, PORTRAIT_W - 4, portraitH - 4);
+
+    // Right portrait panel background
+    gfx.fillStyle(0x000a00, 1);
+    gfx.fillRect(bx + bw - PORTRAIT_W + 2, by + 2, PORTRAIT_W - 4, portraitH - 4);
+
+    // Question text area background (below portrait row)
+    gfx.fillStyle(0x000500, 1);
+    gfx.fillRect(bx + 2, by + portraitH + 1, bw - 4, bh - portraitH - 3);
   }
 
-  // Switch left panel to player spy portrait
-  _switchDialogToPlayer() {
-    const { _dialogX: bx, _dialogY: by, _dialogH: bh } = this;
-    const gfx = this.dialogAvatarGfx;
+  // Draw a portrait (sprite or wireface) into a panel
+  _drawPortraitSprite(isLeft, characterId, isActive) {
+    const bx = this._dialogX;
+    const by = this._dialogY;
+    const bw = this._dialogW;
+    const PORTRAIT_W = 80;
+    const portraitH = 100;
+    const D = 5;
+
+    const panelX = isLeft ? bx : bx + bw - PORTRAIT_W;
+    const panelCX = panelX + PORTRAIT_W / 2;
+    const panelCY = by + portraitH / 2;
+
+    const gfx = isLeft ? this.dialogAvatarGfx : this.dialogAvatarRightGfx;
     gfx.clear();
 
+    // Clip background
+    gfx.fillStyle(0x000a00, 1);
+    gfx.fillRect(panelX + 2, by + 2, PORTRAIT_W - 4, portraitH - 4);
+
+    // Active speaker glow border
+    if (isActive) {
+      gfx.lineStyle(1, COLORS.ACCENT, 0.5);
+      gfx.strokeRect(panelX + 3, by + 3, PORTRAIT_W - 6, portraitH - 6);
+    }
+
+    if (characterId !== null && characterId !== undefined && this.textures.exists('roster')) {
+      // Destroy old sprite if any
+      const imgKey = isLeft ? '_dialogLeftImg' : '_dialogRightImg';
+      if (this[imgKey]) { this[imgKey].destroy(); this[imgKey] = null; }
+
+      const spy = this.characters[characterId];
+      const frameKey = spy ? (ROSTER_FRAME[spy.name.toLowerCase()] ?? 0) : 0;
+      const img = this.add.image(panelCX, panelCY - 4, 'roster', frameKey)
+        .setDepth(D + 1)
+        .setDisplaySize(60, 60)
+        .setAlpha(isActive ? 1.0 : 0.45);
+      this[imgKey] = img;
+    } else {
+      // Unknown / CPU — use who.jpg image
+      const imgKey = isLeft ? '_dialogLeftImg' : '_dialogRightImg';
+      if (this[imgKey]) { this[imgKey].destroy(); this[imgKey] = null; }
+
+      if (this.textures.exists('unknown')) {
+        const img = this.add.image(panelCX, panelCY - 4, 'unknown')
+          .setDepth(D + 1)
+          .setDisplaySize(PORTRAIT_W - 8, portraitH - 8)
+          .setAlpha(isActive ? 1.0 : 0.35);
+        this[imgKey] = img;
+      }
+    }
+  }
+
+  // Switch left panel to player spy portrait (player is speaking)
+  _switchDialogToPlayer() {
     const spy = this.characters[this.playerSpyId];
-    const cx = bx + 32;
-    const cy = by + bh / 2 - 4;
 
-    gfx.fillStyle(COLORS.DIM, 1);
-    gfx.fillRect(cx - 15, cy - 32, 30, 36);
-    gfx.fillStyle(COLORS.TEXT_DIM, 0.9);
-    gfx.fillRect(cx - 22, cy + 4, 44, 18);
+    // Left panel = player (active speaker), right panel = CPU (listener)
+    this._drawPortraitSprite(true, this.playerSpyId, true);
+    this._drawPortraitSprite(false, null, false); // CPU wireface on right
 
-    // Eyewear
-    gfx.lineStyle(1, COLORS.PRIMARY, 0.85);
-    const eyewear = spy.eyewear;
-    if (eyewear === 'glasses') {
-      gfx.strokeRect(cx - 13, cy - 22, 10, 7);
-      gfx.strokeRect(cx + 3,  cy - 22, 10, 7);
-      gfx.beginPath(); gfx.moveTo(cx - 3, cy - 18); gfx.lineTo(cx + 3, cy - 18); gfx.strokePath();
-    } else if (eyewear === 'goggles') {
-      gfx.strokeRect(cx - 14, cy - 24, 28, 8);
-    } else if (eyewear === 'visor') {
-      gfx.fillStyle(COLORS.TEXT_DIM, 0.5);
-      gfx.fillRect(cx - 14, cy - 25, 28, 9);
-      gfx.lineStyle(1, COLORS.ACCENT, 0.6);
-      gfx.strokeRect(cx - 14, cy - 25, 28, 9);
-    }
-    // Facial hair
-    const facialHair = spy.facialHair;
-    if (facialHair === 'beard') {
-      gfx.fillStyle(COLORS.DIM, 1);
-      gfx.fillRect(cx - 12, cy - 4, 24, 9);
-    } else if (facialHair === 'mustache') {
-      gfx.fillStyle(COLORS.DIM, 1);
-      gfx.fillRect(cx - 9, cy - 8, 18, 4);
-    } else if (facialHair === 'goatee') {
-      gfx.fillStyle(COLORS.DIM, 1);
-      gfx.fillRect(cx - 6, cy - 4, 12, 6);
-    }
-    // Marker
-    const marker = spy.marker;
-    gfx.lineStyle(1, COLORS.PRIMARY, 0.85);
-    if (marker === 'scar') {
-      gfx.lineStyle(1, COLORS.DANGER, 0.9);
-      gfx.beginPath(); gfx.moveTo(cx - 4, cy - 26); gfx.lineTo(cx + 2, cy - 14); gfx.strokePath();
-    } else if (marker === 'eyepatch') {
-      gfx.fillStyle(0x000000, 1);
-      gfx.fillRect(cx - 14, cy - 24, 12, 7);
-      gfx.lineStyle(1, COLORS.DIM, 1);
-      gfx.strokeRect(cx - 14, cy - 24, 12, 7);
-      gfx.beginPath(); gfx.moveTo(cx - 14, cy - 21); gfx.lineTo(cx + 14, cy - 21); gfx.strokePath();
-    } else if (marker === 'headset') {
-      gfx.lineStyle(1, COLORS.PRIMARY, 0.9);
-      gfx.beginPath();
-      gfx.arc(cx, cy - 26, 17, Math.PI, 0, false);
-      gfx.strokePath();
-      gfx.fillStyle(COLORS.PRIMARY, 1);
-      gfx.fillCircle(cx + 17, cy - 20, 3);
-      gfx.lineStyle(1, COLORS.PRIMARY, 0.7);
-      gfx.beginPath(); gfx.moveTo(cx + 17, cy - 17); gfx.lineTo(cx + 17, cy - 8); gfx.strokePath();
-    }
+    // Destroy right sprite image if exists
+    if (this._dialogRightImg) { this._dialogRightImg.destroy(); this._dialogRightImg = null; }
+
+    // Active bar side = left
+    this._audioBarsActive = 'left';
 
     if (this.dialogNameBadge) {
-      this.dialogNameBadge.setText(`▶ ${spy.name}`).setColor('#00ff41');
+      this.dialogNameBadge.setText(spy ? spy.name.toUpperCase() : 'YOU').setColor('#00ff41');
+    }
+    if (this._dialogRightNameBadge) {
+      this._dialogRightNameBadge.setText('UNKNOWN').setColor('#440000');
     }
 
     this._dialogMode = 'player';
   }
 
-  // Switch left panel to CPU wireframe face
+  // Switch left panel to CPU wireframe face (CPU is speaking)
   _switchDialogToCpu() {
-    const { _dialogX: bx, _dialogY: by, _dialogH: bh } = this;
-    const gfx = this.dialogAvatarGfx;
-    gfx.clear();
+    const spy = this.characters[this.playerSpyId];
 
-    // Fill avatar panel background black so player portrait is fully replaced
-    gfx.fillStyle(0x000000, 1);
-    gfx.fillRect(bx + 4, by + 4, 58, bh - 8);
+    // Left panel = CPU wireface (active speaker), right panel = player (listener)
+    // Destroy left sprite if any
+    if (this._dialogLeftImg) { this._dialogLeftImg.destroy(); this._dialogLeftImg = null; }
+    this._drawPortraitSprite(true, null, true);   // CPU wireface on left (active)
+    this._drawPortraitSprite(false, this.playerSpyId, false); // player portrait on right (dim)
 
-    const cx = bx + 33;
-    const cy = by + bh / 2 - 2;
-    this._drawPolygonalFace(gfx, cx, cy, 34);
+    // Active bar side = right (so bars lean toward right portrait)
+    this._audioBarsActive = 'right';
 
     if (this.dialogNameBadge) {
-      this.dialogNameBadge.setText('▶ UNKNOWN').setColor('#ff4444');
+      this.dialogNameBadge.setText('UNKNOWN').setColor('#ff4444');
+    }
+    if (this._dialogRightNameBadge) {
+      this._dialogRightNameBadge.setText(spy ? spy.name.toUpperCase() : 'YOU').setColor('#005514');
     }
 
     this._dialogMode = 'cpu';
@@ -712,27 +878,37 @@ export class GameScene extends Phaser.Scene {
     this._dialogTypeTimer = this.time.delayedCall(50, typeChar);
   }
 
-  // Quick static flicker on the dialog avatar panel then calls onDone
+  // Quick static flicker on both portrait panels then calls onDone
   _dialogStaticFlicker(onDone) {
-    const { _dialogX: bx, _dialogY: by, _dialogH: bh } = this;
-    const gfx = this.dialogAvatarGfx;
+    const { _dialogX: bx, _dialogY: by } = this;
+    const PORTRAIT_W = 80;
+    const portraitH = 100;
+    // Destroy any sprites during flicker
+    if (this._dialogLeftImg) { this._dialogLeftImg.destroy(); this._dialogLeftImg = null; }
+    if (this._dialogRightImg) { this._dialogRightImg.destroy(); this._dialogRightImg = null; }
+    const gfxL = this.dialogAvatarGfx;
+    const gfxR = this.dialogAvatarRightGfx;
     let flickers = 0;
     const MAX = 6;
     const flick = () => {
-      gfx.clear();
-      // Draw random noise pixels to simulate static
-      for (let i = 0; i < 120; i++) {
-        const px = bx + 4 + Math.random() * 58;
-        const py = by + 4 + Math.random() * (bh - 8);
-        const c = Math.random() > 0.5 ? 0x00ff41 : 0x003300;
-        gfx.fillStyle(c, Math.random() * 0.8 + 0.2);
-        gfx.fillRect(px, py, 2 + Math.floor(Math.random() * 6), 1);
+      gfxL.clear(); gfxR.clear();
+      // Random noise pixels across both portrait panels
+      for (let panel = 0; panel < 2; panel++) {
+        const gfx = panel === 0 ? gfxL : gfxR;
+        const px0 = panel === 0 ? bx + 2 : bx + this._dialogW - PORTRAIT_W + 2;
+        for (let i = 0; i < 80; i++) {
+          const px = px0 + Math.random() * (PORTRAIT_W - 4);
+          const py = by + 2 + Math.random() * (portraitH - 4);
+          const c = Math.random() > 0.5 ? 0x00ff41 : 0x003300;
+          gfx.fillStyle(c, Math.random() * 0.8 + 0.2);
+          gfx.fillRect(px, py, 2 + Math.floor(Math.random() * 5), 1);
+        }
       }
       flickers++;
       if (flickers < MAX) {
         this.time.delayedCall(40, flick);
       } else {
-        gfx.clear();
+        gfxL.clear(); gfxR.clear();
         if (onDone) onDone();
       }
     };
@@ -761,18 +937,18 @@ export class GameScene extends Phaser.Scene {
     if (this.dialogResultStamp) this.dialogResultStamp.setText('');
   }
 
-  // Temporarily inject YES/NO buttons into the dialog right panel for CPU interrogation
+  // Temporarily inject YES/NO buttons into the dialog question area for CPU interrogation
   _showDialogAnswerButtons(onAnswer) {
     const { _dialogX: bx, _dialogY: by, _dialogW: bw, _dialogH: bh } = this;
-    // Right panel starts at bx+66 (after avatar divider), has width bw-70
-    const panelX = bx + 66;
-    const panelW = bw - 70;
+    // YES/NO row sits at the bottom of the codec box, above the verify bar
+    const panelX = bx + 4;
+    const panelW = bw - 8;
     const gap = 6;
     const btnW = Math.floor((panelW - gap) / 2);
-    const btnH = 24;
-    const btnY = by + bh - btnH - 6; // flush to bottom of dialog
+    const btnH = 28;
+    const btnY = by + bh - 34; // dedicated row at bottom, 34px from box bottom
 
-    const yesX = panelX + 2;
+    const yesX = panelX;
     const noX  = yesX + btnW + gap;
 
     const yesBg = this.add.graphics();
@@ -825,10 +1001,11 @@ export class GameScene extends Phaser.Scene {
   // onComplete: called after result flashes (so game logic can continue)
   _runChainVerify(truthValue, onComplete) {
     this._clearVerify();
-    const { _dialogX: bx, _dialogY: by, _dialogW: bw } = this;
-    const barX = bx + 70;
-    const barY = by + 72;
-    const barMaxW = bw - 78;
+    const { _dialogX: bx, _dialogY: by, _dialogW: bw, _dialogH: bh } = this;
+    // Bar sits at fixed position below question text (matches _buildPlayerDialogBox verifyY)
+    const barX = bx + 4;
+    const barY = by + bh - 22;
+    const barMaxW = bw - 8;
 
     let pct = 0;
     const totalMs = 1800;
@@ -852,7 +1029,7 @@ export class GameScene extends Phaser.Scene {
 
         this.dialogVerifyBarFill.clear();
         this.dialogVerifyBarFill.fillStyle(barColor, 0.9);
-        this.dialogVerifyBarFill.fillRect(barX, barY, fillW, 8);
+        this.dialogVerifyBarFill.fillRect(barX, barY, fillW, 7);
 
         this.dialogVerifyLabel.setText(`⛓ VERIFYING: ${pct.toFixed(0)}%`).setColor('#00aa22');
 
@@ -1180,14 +1357,22 @@ export class GameScene extends Phaser.Scene {
       proceed();
     });
 
-    // Fetch answer in parallel
-    askQuestion(this.sessionId, category, value).then(result => {
-      apiResult = result;
+    // Fetch answer — in DEV mode answer locally from character data
+    if (this._devCpuSpyId !== null) {
+      const cpySpy = this.characters[this._devCpuSpyId];
+      const prop = _catToProp(category);
+      const matches = String(cpySpy[prop]).toUpperCase() === value.toUpperCase();
+      apiResult = { answer: matches ? 'YES' : 'NO' };
       proceed();
-    }).catch(e => {
-      apiError = e;
-      proceed();
-    });
+    } else {
+      askQuestion(this.sessionId, category, value).then(result => {
+        apiResult = result;
+        proceed();
+      }).catch(e => {
+        apiError = e;
+        proceed();
+      });
+    }
   }
 
   // ── Declare ───────────────────────────────────────────────────────────
@@ -1233,7 +1418,10 @@ export class GameScene extends Phaser.Scene {
 
     this.networkWindow.runProofAnimation(async () => {
       try {
-        const result = await declareSpy(this.sessionId, character.id, this.walletAddress, this.gameContractAddress, this.gameId);
+        // Dev mode: evaluate locally
+        const result = this._devCpuSpyId !== null
+          ? { correct: character.id === this._devCpuSpyId, spy: this.characters[this._devCpuSpyId], onChain: null, proof: null }
+          : await declareSpy(this.sessionId, character.id, this.walletAddress, this.gameContractAddress, this.gameId);
         const score = this._calcScore(result.correct);
 
         this.networkWindow.showProofResult(result.correct, result.onChain?.txId, this.sound);
@@ -1324,8 +1512,12 @@ export class GameScene extends Phaser.Scene {
       if (this.state.gameOver || this.cpu.done) return;
 
       const playerSpy = this.characters[this.playerSpyId];
-      const correctAnswer = String(playerSpy[_catToProp(question.category)]).toUpperCase() === question.value.toUpperCase() ? 'YES' : 'NO';
+      const prop = _catToProp(question.category);
+      const spyVal = String(playerSpy[prop]).toUpperCase();
+      const qVal = question.value.toUpperCase();
+      const correctAnswer = spyVal === qVal ? 'YES' : 'NO';
       const wasLie = playerAnswer !== correctAnswer;
+      console.log(`[LIE CHECK] spy=${playerSpy.name} prop=${prop} spyVal=${spyVal} qVal=${qVal} correct=${correctAnswer} player=${playerAnswer} wasLie=${wasLie}`);
 
       // Log CPU question + player answer to secure channel
       const cpuSentence = formatQuestion(question.category, question.value);
