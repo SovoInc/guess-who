@@ -262,12 +262,14 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
     res.json({ gameServer: true, proofServer: proofServer.ok, node: node.ok, indexer: indexer.ok, proofServerUrl: config.proofServer });
   });
 
-  const LOCAL_PROOF_URL = 'http://localhost:6300';
-  const REMOTE_PROOF_URL = 'https://lace-proof-pub.preprod.midnight.network';
+  // "remote" = proof server running on this machine (AWS or dev box)
+  // "local"  = proof server running on the connecting client's machine (dev only)
+  const SERVER_PROOF_URL = config.proofServer; // capture the server's own proof server URL at startup
+  const CLIENT_PROOF_URL = 'http://localhost:6300'; // client's local machine
 
   app.get('/api/proof-server', (_req, res) => {
     const url = config.proofServer;
-    const mode = url.includes('localhost') || url.includes('127.0.0.1') ? 'local' : 'remote';
+    const mode = url === CLIENT_PROOF_URL ? 'local' : 'remote';
     res.json({ url, mode });
   });
 
@@ -277,7 +279,7 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
       res.status(400).json({ error: 'mode must be local or remote' });
       return;
     }
-    (config as any).proofServer = mode === 'local' ? LOCAL_PROOF_URL : REMOTE_PROOF_URL;
+    (config as any).proofServer = mode === 'remote' ? SERVER_PROOF_URL : CLIENT_PROOF_URL;
     logger.info(`Proof server switched to ${mode}: ${config.proofServer}`);
     res.json({ url: config.proofServer, mode });
   });

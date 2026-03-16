@@ -111,36 +111,40 @@ export class QuestionPanel {
     const pw = this.colW;
     const px = this.colX;
     const itemH = 28;
-    const pickerH = values.length * itemH + 16;
+    const HEADER_H = 20;
+    const SCROLLBAR_W = 6;
+    const MAX_VISIBLE = 7;
+    const visibleCount = Math.min(values.length, MAX_VISIBLE);
+    const listH = visibleCount * itemH;
+    const pickerH = HEADER_H + listH + 4;
     const finalY = this._panelY - pickerH - 4;
-    const itemW = pw - 8;
+    const itemW = pw - SCROLLBAR_W - 8;
+    const needsScroll = values.length > MAX_VISIBLE;
 
-    // All objects placed at absolute world coords — no container (avoids input offset bugs)
     this._pickerObjects = [];
+    this._pickerScrollOffset = 0;
 
+    // Background
     const bg = scene.add.graphics().setDepth(20);
-    const drawBg = (y) => {
-      bg.clear();
-      bg.fillStyle(COLORS.PANEL_BG, 0.98);
-      bg.fillRect(px, y, pw, pickerH);
-      bg.lineStyle(1, COLORS.DIM, 1);
-      bg.strokeRect(px, y, pw, pickerH);
-    };
-    drawBg(finalY);
+    bg.fillStyle(COLORS.PANEL_BG, 0.98);
+    bg.fillRect(px, finalY, pw, pickerH);
+    bg.lineStyle(1, COLORS.DIM, 1);
+    bg.strokeRect(px, finalY, pw, pickerH);
     this._pickerObjects.push(bg);
 
+    // Header
     const displayName = CATEGORY_DISPLAY[category] || category;
-    const title = scene.add.text(px + 8, finalY + 6, `${displayName}:`, {
+    const title = scene.add.text(px + 8, finalY + 5, `${displayName}:`, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '6px',
       color: '#00ff41',
     }).setDepth(21);
     this._pickerObjects.push(title);
 
-    // X close button — top-right corner of picker
-    const closeSize = 16;
+    // X close button
+    const closeSize = 14;
     const closeX = px + pw - closeSize - 4;
-    const closeY = finalY + 2;
+    const closeY = finalY + 3;
     const closeGfx = scene.add.graphics().setDepth(22);
     const drawClose = (hover) => {
       closeGfx.clear();
@@ -162,28 +166,55 @@ export class QuestionPanel {
     closeHit.on('pointerup',   () => { this._hidePicker(); });
     this._pickerObjects.push(closeGfx, closeText, closeHit);
 
-    values.forEach((val, i) => {
-      const absY = finalY + 16 + i * itemH;
+    // List area origin
+    const listX = px + 4;
+    const listY = finalY + HEADER_H;
 
+    // Scrollbar
+    const sbGfx = scene.add.graphics().setDepth(23);
+    this._pickerObjects.push(sbGfx);
+
+    const drawScrollbar = () => {
+      sbGfx.clear();
+      if (!needsScroll) return;
+      const sbX = px + pw - SCROLLBAR_W - 2;
+      sbGfx.fillStyle(0x003300, 1);
+      sbGfx.fillRect(sbX, listY, SCROLLBAR_W, listH);
+      const thumbH = Math.max(20, (visibleCount / values.length) * listH);
+      const maxScroll = values.length - visibleCount;
+      const thumbY = listY + (this._pickerScrollOffset / maxScroll) * (listH - thumbH);
+      sbGfx.fillStyle(0x00ff41, 1);
+      sbGfx.fillRect(sbX, thumbY, SCROLLBAR_W, thumbH);
+    };
+
+    // Item rows — one set of objects, repositioned on scroll
+    const itemObjs = values.map((val, i) => {
       const valGfx = scene.add.graphics().setDepth(21);
-      const draw = (hover) => {
-        valGfx.clear();
-        valGfx.fillStyle(hover ? COLORS.BORDER : COLORS.PANEL_BG, 1);
-        valGfx.fillRect(px + 4, absY, itemW, 22);
-        valGfx.lineStyle(1, hover ? COLORS.DIM : COLORS.BORDER, 1);
-        valGfx.strokeRect(px + 4, absY, itemW, 22);
-      };
-      draw(false);
-
-      const valText = scene.add.text(px + 8, absY + 11, val.replace(/_/g, ' ').toUpperCase(), {
+      const valText = scene.add.text(0, 0, val.replace(/_/g, ' ').toUpperCase(), {
         fontFamily: "'Press Start 2P', monospace",
         fontSize: '7px',
         color: '#00ff41',
       }).setOrigin(0, 0.5).setDepth(22);
+      const hit = scene.add.rectangle(0, 0, itemW, 22, 0x000000, 0)
+        .setDepth(22).setInteractive({ useHandCursor: true });
 
-      const hit = scene.add.rectangle(px + 4 + itemW / 2, absY + 11, itemW, 22, 0x000000, 0)
-        .setDepth(22)
-        .setInteractive({ useHandCursor: true });
+      const draw = (hover) => {
+        const rowY = listY + (i - this._pickerScrollOffset) * itemH;
+        const visible = i >= this._pickerScrollOffset && i < this._pickerScrollOffset + visibleCount;
+        valGfx.clear();
+        valText.setVisible(visible);
+        hit.setVisible(visible);
+        if (!visible) return;
+        valGfx.fillStyle(hover ? COLORS.BORDER : COLORS.PANEL_BG, 1);
+        valGfx.fillRect(listX, rowY, itemW, 22);
+        valGfx.lineStyle(1, hover ? COLORS.DIM : COLORS.BORDER, 1);
+        valGfx.strokeRect(listX, rowY, itemW, 22);
+        valText.setPosition(listX + 4, rowY + 11);
+        hit.setPosition(listX + itemW / 2, rowY + 11);
+      };
+
+      draw(false);
+
       hit.on('pointerover', () => { draw(true); valText.setColor('#ffffff'); if (this.soundSynth) this.soundSynth.menuSelect(); });
       hit.on('pointerout',  () => { draw(false); valText.setColor('#00ff41'); });
       hit.on('pointerup', () => {
@@ -196,7 +227,33 @@ export class QuestionPanel {
       });
 
       this._pickerObjects.push(valGfx, valText, hit);
+      return { draw, valText };
     });
+
+    const redraw = () => {
+      itemObjs.forEach(o => { o.valText.setColor('#00ff41'); o.draw(false); });
+      drawScrollbar();
+    };
+
+    // Mouse wheel scroll
+    this._pickerWheelHandler = (pointer, dx, dy) => {
+      if (!needsScroll) return;
+      const maxScroll = values.length - visibleCount;
+      this._pickerScrollOffset = Math.max(0, Math.min(maxScroll, this._pickerScrollOffset + (dy > 0 ? 1 : -1)));
+      redraw();
+    };
+    scene.input.on('wheel', this._pickerWheelHandler);
+
+    // Click outside to close
+    this._pickerOutsideHandler = (pointer) => {
+      if (!this._pickerReady) return;
+      const inX = pointer.x >= px && pointer.x <= px + pw;
+      const inY = pointer.y >= finalY && pointer.y <= finalY + pickerH;
+      if (!inX || !inY) this._hidePicker();
+    };
+    scene.input.on('pointerdown', this._pickerOutsideHandler);
+
+    drawScrollbar();
   }
 
   _hidePicker() {
@@ -205,15 +262,14 @@ export class QuestionPanel {
     this.selectedCategory = null;
     this._pickerReady = false;
 
+    if (this._pickerWheelHandler) { this.scene.input.off('wheel', this._pickerWheelHandler); this._pickerWheelHandler = null; }
+    if (this._pickerOutsideHandler) { this.scene.input.off('pointerdown', this._pickerOutsideHandler); this._pickerOutsideHandler = null; }
+
     const objs = this._pickerObjects || [];
     this._pickerObjects = [];
     objs.forEach(o => { if (o && o.scene) o.destroy(); });
 
-    // Also clean up old container path if somehow still present
-    if (this.pickerContainer) {
-      this.pickerContainer.destroy();
-      this.pickerContainer = null;
-    }
+    if (this.pickerContainer) { this.pickerContainer.destroy(); this.pickerContainer = null; }
   }
 
   _buildArrow() {
