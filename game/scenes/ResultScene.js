@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { COLORS, GAME_WIDTH, GAME_HEIGHT } from '../constants.js';
+import { COLORS, GAME_WIDTH, GAME_HEIGHT, ROSTER_FRAME } from '../constants.js';
 import { applyCRTOverlay, addFlickerTween } from '../utils/crt.js';
 import { getScores } from '../api.js';
 import { startSession } from '../api.js';
@@ -29,7 +29,7 @@ export class ResultScene extends Phaser.Scene {
       });
     }
 
-    const { won, spy, score, questionsUsed, timeElapsed, proof } = this.resultData;
+    const { won, spy, score, questionsUsed, timeElapsed, proof, txId, cpuSpy } = this.resultData;
 
     // Background
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, COLORS.BG);
@@ -46,13 +46,52 @@ export class ResultScene extends Phaser.Scene {
     title.setShadow(0, 0, titleColor, 12, true, true);
     addFlickerTween(this, title);
 
+    // CPU spy portrait (revealed on game over)
+    this._drawCpuSpyPortrait(cpuSpy || spy, titleColor);
+
     // Animated reveal
-    this._typeLines(won, spy, score, questionsUsed, timeElapsed, proof, this.resultData.cpuWon);
+    this._typeLines(won, spy, score, questionsUsed, timeElapsed, proof, this.resultData.cpuWon, txId);
 
     applyCRTOverlay(this);
   }
 
-  _typeLines(won, spy, score, questionsUsed, timeElapsed, proof, cpuWon) {
+  _drawCpuSpyPortrait(spy, borderColor) {
+    if (!spy) return;
+    const SIZE = 120;
+    const x = GAME_WIDTH - SIZE / 2 - 20;
+    const y = 120;
+
+    // Border frame
+    const gfx = this.add.graphics();
+    gfx.lineStyle(2, borderColor === '#00ff41' ? 0x00ff41 : 0xff0000, 1);
+    gfx.strokeRect(x - SIZE / 2 - 2, y - SIZE / 2 - 2, SIZE + 4, SIZE + 4);
+    gfx.lineStyle(1, 0x003300, 1);
+    gfx.strokeRect(x - SIZE / 2 - 4, y - SIZE / 2 - 4, SIZE + 8, SIZE + 8);
+
+    // Portrait sprite
+    if (this.textures.exists('roster')) {
+      const frame = ROSTER_FRAME[spy.name?.toLowerCase()] ?? 0;
+      this.add.image(x, y, 'roster', frame).setDisplaySize(SIZE, SIZE);
+    }
+
+    // Name label
+    this.add.text(x, y + SIZE / 2 + 8, spy.name?.toUpperCase() ?? '', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '8px',
+      color: borderColor,
+      align: 'center',
+    }).setOrigin(0.5, 0);
+
+    // Role label
+    this.add.text(x, y + SIZE / 2 + 22, spy.role?.toUpperCase() ?? '', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '6px',
+      color: '#006622',
+      align: 'center',
+    }).setOrigin(0.5, 0);
+  }
+
+  _typeLines(won, spy, score, questionsUsed, timeElapsed, proof, cpuWon, txId) {
     const lines = [];
 
     lines.push({ text: '', color: '#00aa22' });
@@ -66,9 +105,13 @@ export class ResultScene extends Phaser.Scene {
       lines.push({ text: spy ? spy.name : 'UNKNOWN', color: '#00ff41', large: true });
       lines.push({ text: '', color: '#00aa22' });
       lines.push({ text: 'ZK PROOF VERIFIED ON PROOF OF SPY', color: '#00aa22' });
+      if (txId) {
+        const txShort = String(txId).slice(0, 20) + '...';
+        lines.push({ text: `TX: ${txShort}`, color: '#006622' });
+      }
       if (proof?.hash) {
-        const hashShort = proof.hash.slice(0, 26) + '...';
-        lines.push({ text: `HASH: ${hashShort}`, color: '#006622' });
+        const hashShort = proof.hash.slice(0, 20) + '...';
+        lines.push({ text: `PROOF: ${hashShort}`, color: '#006622' });
       }
     } else {
       lines.push({ text: spy ? 'THE SPY WAS:' : 'TIME EXPIRED', color: '#ff4444' });

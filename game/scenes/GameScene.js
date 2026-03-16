@@ -1419,6 +1419,8 @@ export class GameScene extends Phaser.Scene {
     this.questionPanel.setDisabled(true);
     this.networkWindow.log(`DECLARING: ${character.name}`, '#00ff41');
 
+    this._showDeclareLoader();
+
     this.networkWindow.runProofAnimation(async () => {
       try {
         // Dev mode: evaluate locally
@@ -1427,6 +1429,7 @@ export class GameScene extends Phaser.Scene {
           : await declareSpy(this.sessionId, character.id, this.walletAddress, this.gameContractAddress, this.gameId);
         const score = this._calcScore(result.correct);
 
+        this._hideDeclareLoader();
         this.networkWindow.showProofResult(result.correct, result.onChain?.txId, this.sound);
 
         try {
@@ -1455,9 +1458,11 @@ export class GameScene extends Phaser.Scene {
             questionsUsed: MAX_QUESTIONS - this.state.questionsLeft,
             timeElapsed: TIMER_SECONDS - this.state.timeSeconds,
             proof: result.proof,
+            txId: result.onChain?.txId ?? null,
           });
         });
       } catch (e) {
+        this._hideDeclareLoader();
         this.networkWindow.log('NETWORK ERROR', '#ff4444');
         this.state.gameOver = false;
         this.cpu.done = false;
@@ -1465,12 +1470,79 @@ export class GameScene extends Phaser.Scene {
     }, this.sound);
   }
 
+  _showDeclareLoader() {
+    if (this._declareLoader) return;
+    const W = this._L.gameW, H = this._L.gameH;
+    const bg = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.72).setDepth(50);
+    const label = this.add.text(W / 2, H / 2 - 24, 'SUBMITTING PROOF TO CHAIN', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '10px',
+      color: '#00ff41',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(51);
+
+    const dots = this.add.text(W / 2, H / 2, '...', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '14px',
+      color: '#39ff14',
+    }).setOrigin(0.5).setDepth(51);
+
+    // Spinning bracket animation
+    const frames = ['[    ]', '[>   ]', '[>>  ]', '[>>> ]', '[>>>>]', '[ >>>]', '[  >>]', '[   >]'];
+    let fi = 0;
+    const spinner = this.add.text(W / 2, H / 2 + 28, frames[0], {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '11px',
+      color: '#00aa22',
+    }).setOrigin(0.5).setDepth(51);
+
+    const timer = this.time.addEvent({
+      delay: 120,
+      loop: true,
+      callback: () => {
+        fi = (fi + 1) % frames.length;
+        spinner.setText(frames[fi]);
+      },
+    });
+
+    // Dot pulse
+    let dc = 0;
+    const dotTimer = this.time.addEvent({
+      delay: 500,
+      loop: true,
+      callback: () => {
+        dc = (dc + 1) % 4;
+        dots.setText('.'.repeat(dc) || '');
+      },
+    });
+
+    this._declareLoader = { bg, label, dots, spinner, timer, dotTimer };
+  }
+
+  _hideDeclareLoader() {
+    if (!this._declareLoader) return;
+    const { bg, label, dots, spinner, timer, dotTimer } = this._declareLoader;
+    timer.remove(); dotTimer.remove();
+    bg.destroy(); label.destroy(); dots.destroy(); spinner.destroy();
+    this._declareLoader = null;
+  }
+
   _endGame(data) {
     if (this.timerEvent) this.timerEvent.remove();
     if (this.cpuTurnTimer) this.cpuTurnTimer.remove();
+    // Inject cpu spy info so ResultScene can show the portrait
+    // In prod: result.spy is the cpu spy (revealed by server). In dev: _devCpuSpyId.
+    const cpuSpy = data.cpuWon
+      ? (this._devCpuSpyId !== null ? this.characters[this._devCpuSpyId] : null) // cpu won, spy = player spy already in data.spy
+      : (data.spy || (this._devCpuSpyId !== null ? this.characters[this._devCpuSpyId] : null));
+    const enriched = {
+      ...data,
+      cpuSpy,
+      characters: this.characters,
+    };
     this.cameras.main.fadeOut(500, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start('ResultScene', data);
+      this.scene.start('ResultScene', enriched);
     });
   }
 
