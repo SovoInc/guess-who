@@ -537,9 +537,16 @@ export class MenuScene extends Phaser.Scene {
         '16 MILITARY OPERATIVES USING',
         'ZERO-KNOWLEDGE PROOFS.',
         '',
-        'YOUR GUESSES ARE VERIFIED ON-CHAIN',
-        'WITHOUT REVEALING THE SPY IDENTITY',
-        'UNTIL YOU DECLARE.',
+        'QUESTION VERIFICATION:',
+        'SIMULATED ON-DEVICE. ANSWERS ARE',
+        'CHECKED LOCALLY AND LOGGED TO',
+        'THE SECURE CHANNEL FOR GAMEPLAY.',
+        '',
+        'FINAL DECLARATION:',
+        'YOUR GUESS IS VERIFIED ON-CHAIN',
+        'VIA A MIDNIGHT ZERO-KNOWLEDGE',
+        'PROOF — WITHOUT REVEALING THE',
+        'SPY IDENTITY UNTIL YOU DECLARE.',
         '',
         'CONTROLS:',
         'CLICK CATEGORY BUTTONS TO ASK',
@@ -552,7 +559,7 @@ export class MenuScene extends Phaser.Scene {
         this.add.text(panel.x + 16, startY + i * 22, line, {
           fontFamily: "'Press Start 2P', monospace",
           fontSize: '9px',
-          color: line.startsWith('CONTROLS') || line === 'PROOF OF SPY' ? '#00ff41' : '#00aa22',
+          color: line === 'PROOF OF SPY' || line === 'CONTROLS:' || line === 'QUESTION VERIFICATION:' || line === 'FINAL DECLARATION:' ? '#00ff41' : '#00aa22',
         });
       });
     });

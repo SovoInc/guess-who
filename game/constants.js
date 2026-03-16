@@ -132,7 +132,7 @@ export function formatQuestion(category, value) {
     case 'SEX':
       return value === 'F' ? 'Is the target female?' : 'Is the target male?';
     case 'HEADWEAR':
-      if (value === 'none') return 'Is the target wearing no headwear?';
+      if (value === 'none') return 'Is the target bare-headed?';
       if (value === 'helmet') return 'Is the target wearing a combat helmet?';
       if (value === 'cap')    return 'Is the target wearing a cap?';
       if (value === 'beret')  return 'Is the target wearing a beret?';

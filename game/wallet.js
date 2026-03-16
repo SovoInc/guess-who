@@ -3,17 +3,17 @@ const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS;
 
 export function getAddress() {
   if (typeof window === 'undefined') return null;
-  return sessionStorage.getItem(SESSION_KEY);
+  return localStorage.getItem(SESSION_KEY);
 }
 
 export function setAddress(address) {
   if (typeof window === 'undefined') return;
-  sessionStorage.setItem(SESSION_KEY, address);
+  localStorage.setItem(SESSION_KEY, address);
 }
 
 export function clearAddress() {
   if (typeof window === 'undefined') return;
-  sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(SESSION_KEY);
 }
 
 export function truncateAddress(address, chars = 8) {
