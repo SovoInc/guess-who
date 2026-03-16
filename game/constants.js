@@ -20,15 +20,15 @@ export const ALL_CHARACTERS = [
   { id: 'blaze',    name: 'Blaze',    bucket: 'A', sex: 'M', rank: 'Captain',    role: 'Demolitions',        headwear: 'helmet', hairShape: 'short',    facialHair: 'beard',    eyewear: 'goggles', marker: 'scar'    },
   { id: 'halo',     name: 'Halo',     bucket: 'A', sex: 'F', rank: 'Captain',    role: 'Pilot',              headwear: 'helmet', hairShape: 'ponytail', facialHair: 'none',     eyewear: 'visor',   marker: 'none'    },
   { id: 'razor',    name: 'Razor',    bucket: 'A', sex: 'M', rank: 'Sergeant',   role: 'Breacher',           headwear: 'helmet', hairShape: 'buzz',     facialHair: 'beard',    eyewear: 'none',    marker: 'patch'   },
-  { id: 'sentinel', name: 'Sentinel', bucket: 'A', sex: 'M', rank: 'Colonel',    role: 'Security Chief',     headwear: 'helmet', hairShape: 'bald',     facialHair: 'beard',    eyewear: 'glasses', marker: 'badge'   },
+  { id: 'sentinel', name: 'Sentinel', bucket: 'A', sex: 'M', rank: 'Colonel',    role: 'Security Chief',     headwear: 'none',   hairShape: 'bald',     facialHair: 'beard',    eyewear: 'glasses', marker: 'badge'   },
   { id: 'viper',    name: 'Viper',    bucket: 'B', sex: 'F', rank: 'Sergeant',   role: 'Recon Analyst',      headwear: 'none',   hairShape: 'ponytail', facialHair: 'none',     eyewear: 'glasses', marker: 'headset' },
   { id: 'raven',    name: 'Raven',    bucket: 'B', sex: 'F', rank: 'Lieutenant', role: 'Intelligence',       headwear: 'none',   hairShape: 'long',     facialHair: 'none',     eyewear: 'glasses', marker: 'headset' },
   { id: 'bishop',   name: 'Bishop',   bucket: 'B', sex: 'M', rank: 'Major',      role: 'Signals Officer',    headwear: 'none',   hairShape: 'short',    facialHair: 'mustache', eyewear: 'glasses', marker: 'tablet'  },
-  { id: 'echo',     name: 'Echo',     bucket: 'B', sex: 'F', rank: 'Sergeant',   role: 'Recon',              headwear: 'none',   hairShape: 'ponytail', facialHair: 'none',     eyewear: 'glasses', marker: 'none'    },
+  { id: 'echo',     name: 'Echo',     bucket: 'B', sex: 'F', rank: 'Sergeant',   role: 'Recon',              headwear: 'none',   hairShape: 'ponytail', facialHair: 'none',     eyewear: 'none',    marker: 'none'    },
   { id: 'hydra',    name: 'Hydra',    bucket: 'B', sex: 'F', rank: 'Lieutenant', role: 'Chem Ops',           headwear: 'none',   hairShape: 'long',     facialHair: 'none',     eyewear: 'goggles', marker: 'mask'    },
   { id: 'nova',     name: 'Nova',     bucket: 'B', sex: 'F', rank: 'Major',      role: 'Cyberwarfare',       headwear: 'none',   hairShape: 'short',    facialHair: 'none',     eyewear: 'glasses', marker: 'headset' },
   { id: 'cipher',   name: 'Cipher',   bucket: 'B', sex: 'F', rank: 'Major',      role: 'Cryptography',       headwear: 'none',   hairShape: 'short',    facialHair: 'none',     eyewear: 'glasses', marker: 'tablet'  },
-  { id: 'pulse',    name: 'Pulse',    bucket: 'B', sex: 'F', rank: 'Lieutenant', role: 'Tech Ops',           headwear: 'none',   hairShape: 'short',    facialHair: 'none',     eyewear: 'glasses', marker: 'headset' },
+  { id: 'pulse',    name: 'Pulse',    bucket: 'B', sex: 'F', rank: 'Lieutenant', role: 'Tech Ops',           headwear: 'cap',    hairShape: 'short',    facialHair: 'none',     eyewear: 'glasses', marker: 'headset' },
   { id: 'archer',   name: 'Archer',   bucket: 'C', sex: 'M', rank: 'Lieutenant', role: 'Sniper',             headwear: 'cap',    hairShape: 'buzz',     facialHair: 'none',     eyewear: 'visor',   marker: 'scope'   },
   { id: 'orion',    name: 'Orion',    bucket: 'C', sex: 'M', rank: 'Sergeant',   role: 'Sniper',             headwear: 'cap',    hairShape: 'spiky',    facialHair: 'beard',    eyewear: 'none',    marker: 'scar'    },
   { id: 'kraken',   name: 'Kraken',   bucket: 'C', sex: 'M', rank: 'Colonel',    role: 'Naval Ops',          headwear: 'beret',  hairShape: 'short',    facialHair: 'beard',    eyewear: 'none',    marker: 'pipe'    },
@@ -36,7 +36,7 @@ export const ALL_CHARACTERS = [
   { id: 'talon',    name: 'Talon',    bucket: 'C', sex: 'M', rank: 'Sergeant',   role: 'Sniper',             headwear: 'cap',    hairShape: 'buzz',     facialHair: 'mustache', eyewear: 'none',    marker: 'scope'   },
   { id: 'zenith',   name: 'Zenith',   bucket: 'C', sex: 'M', rank: 'Colonel',    role: 'Commander',          headwear: 'beret',  hairShape: 'short',    facialHair: 'beard',    eyewear: 'glasses', marker: 'medal'   },
   { id: 'frost',    name: 'Frost',    bucket: 'C', sex: 'M', rank: 'Lieutenant', role: 'Arctic Recon',       headwear: 'cap',    hairShape: 'short',    facialHair: 'beard',    eyewear: 'goggles', marker: 'scarf'   },
-  { id: 'nomad',    name: 'Nomad',    bucket: 'C', sex: 'M', rank: 'Captain',    role: 'Field Ops',          headwear: 'cap',    hairShape: 'short',    facialHair: 'beard',    eyewear: 'none',    marker: 'none'    },
+  { id: 'nomad',    name: 'Nomad',    bucket: 'C', sex: 'M', rank: 'Captain',    role: 'Field Ops',          headwear: 'none',   hairShape: 'short',    facialHair: 'beard',    eyewear: 'none',    marker: 'none'    },
   { id: 'ghost',    name: 'Ghost',    bucket: 'D', sex: 'F', rank: 'Captain',    role: 'Assassin',           headwear: 'hood',   hairShape: 'long',     facialHair: 'none',     eyewear: 'none',    marker: 'mask'    },
   { id: 'cobra',    name: 'Cobra',    bucket: 'D', sex: 'F', rank: 'Lieutenant', role: 'Saboteur',           headwear: 'none',   hairShape: 'ponytail', facialHair: 'none',     eyewear: 'none',    marker: 'eyepatch'},
   { id: 'phantom',  name: 'Phantom',  bucket: 'D', sex: 'M', rank: 'Captain',    role: 'Stealth Operative',  headwear: 'hood',   hairShape: 'short',    facialHair: 'none',     eyewear: 'none',    marker: 'mask'    },
@@ -46,6 +46,22 @@ export const ALL_CHARACTERS = [
   { id: 'dagger',   name: 'Dagger',   bucket: 'D', sex: 'M', rank: 'Sergeant',   role: 'Assassin',           headwear: 'hood',   hairShape: 'spiky',    facialHair: 'mustache', eyewear: 'none',    marker: 'scar'    },
   { id: 'vector',   name: 'Vector',   bucket: 'D', sex: 'F', rank: 'Major',      role: 'Tactical AI',        headwear: 'none',   hairShape: 'short',    facialHair: 'none',     eyewear: 'visor',   marker: 'ar_unit' },
 ];
+
+// ── Spritesheet frame index (alphabetical order, 6-column grid) ──────────────
+// Archer=0, Atlas=1, Bishop=2, Blaze=3, Cipher=4, Cobra=5,
+// Dagger=6, Echo=7, Falcon=8, Frost=9, Ghost=10, Halo=11,
+// Hydra=12, Kraken=13, Loki=14, Nomad=15, Nova=16, Orion=17,
+// Phantom=18, Pulse=19, Raven=20, Razor=21, Sentinel=22, Shade=23,
+// Striker=24, Talon=25, Titan=26, Vector=27, Vega=28, Viper=29,
+// Wolf=30, Zenith=31
+export const ROSTER_FRAME = {
+  archer: 0, atlas: 1, bishop: 2, blaze: 3, cipher: 4, cobra: 5,
+  dagger: 6, echo: 7, falcon: 8, frost: 9, ghost: 10, halo: 11,
+  hydra: 12, kraken: 13, loki: 14, nomad: 15, nova: 16, orion: 17,
+  phantom: 18, pulse: 19, raven: 20, razor: 21, sentinel: 22, shade: 23,
+  striker: 24, talon: 25, titan: 26, vector: 27, vega: 28, viper: 29,
+  wolf: 30, zenith: 31,
+};
 
 // ── Board Generation ─────────────────────────────────────────────────────────
 
@@ -91,7 +107,7 @@ export function generateBoard(characters) {
       ..._sample(buckets.D, 4),
     ];
     if (_validateBoard(board)) {
-      return _sample(board, 16).map((c, i) => ({ ...c, id: i }));
+      return _sample(board, 16).map((c, i) => ({ ...c, charId: c.id, id: i }));
     }
   }
   throw new Error('Could not generate valid board after 200 tries');
@@ -107,7 +123,7 @@ export const QUESTION_CATEGORIES = {
   HAIR:        ['bald', 'buzz', 'short', 'spiky', 'long', 'ponytail'],
   FACIAL_HAIR: ['none', 'mustache', 'beard', 'goatee'],
   EYEWEAR:     ['none', 'glasses', 'goggles', 'visor'],
-  MARKER:      ['none', 'scar', 'beard', 'patch', 'radio', 'headset', 'tablet', 'mask', 'eyepatch', 'scope', 'pipe', 'medal', 'badge', 'ar_unit', 'scarf'],
+  MARKER:      ['none', 'scar', 'patch', 'radio', 'headset', 'tablet', 'mask', 'eyepatch', 'scope', 'pipe', 'medal', 'badge', 'ar_unit', 'scarf'],
 };
 
 export function formatQuestion(category, value) {
@@ -116,25 +132,48 @@ export function formatQuestion(category, value) {
     case 'SEX':
       return value === 'F' ? 'Is the target female?' : 'Is the target male?';
     case 'HEADWEAR':
-      return value === 'none'
-        ? 'Is the target wearing no headwear?'
-        : `Is the target wearing a ${v}?`;
+      if (value === 'none') return 'Is the target bareheaded?';
+      if (value === 'helmet') return 'Is the target wearing a combat helmet?';
+      if (value === 'cap')    return 'Is the target wearing a cap?';
+      if (value === 'beret')  return 'Is the target wearing a beret?';
+      if (value === 'hood')   return 'Is the target wearing a hood?';
+      return `Is the target wearing a ${v}?`;
     case 'HAIR':
-      return value === 'bald'
-        ? 'Is the target bald?'
-        : `Does the target have ${v} hair?`;
+      if (value === 'bald')     return 'Is the target bald?';
+      if (value === 'buzz')     return 'Does the target have a buzz cut?';
+      if (value === 'short')    return 'Does the target have short hair?';
+      if (value === 'spiky')    return 'Does the target have spiky hair?';
+      if (value === 'long')     return 'Does the target have long hair?';
+      if (value === 'ponytail') return 'Does the target have a ponytail?';
+      return `Does the target have ${v} hair?`;
     case 'FACIAL_HAIR':
-      return value === 'none'
-        ? 'Does the target have no facial hair?'
-        : `Does the target have a ${v}?`;
+      if (value === 'none')     return 'Does the target have no facial hair?';
+      if (value === 'mustache') return 'Does the target have a mustache?';
+      if (value === 'beard')    return 'Does the target have a beard?';
+      if (value === 'goatee')   return 'Does the target have a goatee?';
+      return `Does the target have a ${v}?`;
     case 'EYEWEAR':
-      return value === 'none'
-        ? 'Is the target wearing no eyewear?'
-        : `Is the target wearing ${v}?`;
+      if (value === 'none')    return 'Is the target wearing no eyewear?';
+      if (value === 'glasses') return 'Is the target wearing glasses?';
+      if (value === 'goggles') return 'Is the target wearing goggles?';
+      if (value === 'visor')   return 'Is the target wearing a visor?';
+      return `Is the target wearing ${v}?`;
     case 'MARKER':
-      return value === 'none'
-        ? 'Does the target have no distinguishing marker?'
-        : `Does the target have a ${v}?`;
+      if (value === 'none')    return 'Does the target have no visible marker?';
+      if (value === 'scar')    return 'Does the target have a visible scar?';
+      if (value === 'patch')   return 'Does the target have a shoulder patch?';
+      if (value === 'radio')   return 'Does the target carry a radio?';
+      if (value === 'headset') return 'Does the target wear a headset?';
+      if (value === 'tablet')  return 'Does the target carry a tablet?';
+      if (value === 'mask')    return 'Does the target wear a face mask?';
+      if (value === 'eyepatch') return 'Does the target wear an eyepatch?';
+      if (value === 'scope')   return 'Does the target carry a scope?';
+      if (value === 'pipe')    return 'Does the target smoke a pipe?';
+      if (value === 'medal')   return 'Does the target wear a medal?';
+      if (value === 'badge')   return 'Does the target wear a badge?';
+      if (value === 'ar_unit') return 'Does the target have an AR unit?';
+      if (value === 'scarf')   return 'Does the target wear a scarf?';
+      return `Does the target have a ${v}?`;
     default:
       return `Is the target's ${category}: ${v}?`;
   }

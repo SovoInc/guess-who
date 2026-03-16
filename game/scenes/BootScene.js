@@ -20,6 +20,12 @@ export class BootScene extends Phaser.Scene {
     super({ key: 'BootScene' });
   }
 
+  preload() {
+    this.load.spritesheet('roster', '/assets/roster.png', { frameWidth: 96, frameHeight: 96 });
+    this.load.audio('theme', '/assets/theme.ogg');
+    this.load.image('unknown', '/assets/unknown.jpg');
+  }
+
   create() {
     clearAddress();
     this.sound = new SoundSynth();
@@ -54,15 +60,18 @@ export class BootScene extends Phaser.Scene {
     // Start typing
     this._typeNextLine();
 
-    // Skip on input
-    this.input.once('pointerdown', () => {
+    // Any input: if still typing → skip to end; if done → proceed immediately
+    const onInput = () => {
       if (this.sound) this.sound.bootBeep();
-      this._skipToEnd();
-    });
-    this.input.keyboard.once('keydown', () => {
-      if (this.sound) this.sound.bootBeep();
-      this._skipToEnd();
-    });
+      if (this.typingDone) {
+        this._proceed();
+      } else {
+        this._skipToEnd();
+      }
+    };
+    this.input.on('pointerdown', onInput);
+    this.input.keyboard.on('keydown', onInput);
+    this._inputHandler = onInput;
 
     applyCRTOverlay(this);
   }
@@ -71,14 +80,11 @@ export class BootScene extends Phaser.Scene {
     if (this.currentLine >= BOOT_LINES.length) {
       this.typingDone = true;
       this.ready = true;
-
-      // Enable proceed input
-      this.input.once('pointerdown', () => this._proceed());
-      this.input.keyboard.once('keydown', () => this._proceed());
+      // Input handler already listening — it will call _proceed() on next input
       return;
     }
 
-    const y = 80 + this.currentLine * 28;
+    const y = 248 + this.currentLine * 28;
     const lineText = this.add.text(60, y, '', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '11px',
@@ -118,17 +124,12 @@ export class BootScene extends Phaser.Scene {
   }
 
   _skipToEnd() {
-    if (this.typingDone) {
-      this._proceed();
-      return;
-    }
-
     // Clear and show all lines immediately
     this.lineTexts.forEach(t => t.destroy());
     this.lineTexts = [];
 
     BOOT_LINES.forEach((line, i) => {
-      const y = 80 + i * 28;
+      const y = 248 + i * 28;
       const t = this.add.text(60, y, line, {
         fontFamily: "'Press Start 2P', monospace",
         fontSize: '11px',
@@ -139,16 +140,23 @@ export class BootScene extends Phaser.Scene {
 
     this.typingDone = true;
     this.cursor.setVisible(false);
-
-    // Listen for proceed
-    this.time.delayedCall(300, () => {
-      this.input.once('pointerdown', () => this._proceed());
-      this.input.keyboard.once('keydown', () => this._proceed());
-    });
   }
 
   _proceed() {
+    if (!this._active) return;
     this._active = false;
+    if (this._inputHandler) {
+      this.input.off('pointerdown', this._inputHandler);
+      this.input.keyboard.off('keydown', this._inputHandler);
+    }
+
+    // Start theme music — loop forever, carry through all scenes
+    if (this.cache.audio.exists('theme') && !this.registry.get('themeMusic')) {
+      const music = this.sys.sound.add('theme', { loop: true, volume: 0.5 });
+      music.play();
+      this.registry.set('themeMusic', music);
+    }
+
     this.cameras.main.fadeOut(400, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
       this.scene.start('MenuScene');
@@ -158,5 +166,9 @@ export class BootScene extends Phaser.Scene {
   shutdown() {
     this._active = false;
     this.time.removeAllEvents();
+    if (this._inputHandler) {
+      this.input.off('pointerdown', this._inputHandler);
+      this.input.keyboard.off('keydown', this._inputHandler);
+    }
   }
 }
