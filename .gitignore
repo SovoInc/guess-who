@@ -3,7 +3,7 @@
 **/*.log
 **/logs/
 **/.DS_Store
-**/midnight-level-db/
+**/midnight-level-db*/
 *.env
 !*.env.example
 public/managed/counter
