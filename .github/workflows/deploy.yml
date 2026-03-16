@@ -41,15 +41,15 @@ jobs:
           SCP="scp -i /tmp/deploy_key -o StrictHostKeyChecking=no"
 
           # Write fresh .env to server
-          cat > /tmp/server.env << EOF
-VITE_CONTRACT_ADDRESS=${VITE_CONTRACT_ADDRESS}
-VITE_API_URL=${VITE_API_URL}
-WALLET_SEED=${WALLET_SEED}
-GUESS_WHO_CONTRACT_ADDRESS=${GUESS_WHO_CONTRACT_ADDRESS}
-POSTGRES_URL=${POSTGRES_URL}
-POOL_TARGET_SIZE=${POOL_TARGET_SIZE}
-PROOF_SERVER_URL=${PROOF_SERVER_URL}
-EOF
+          printf '%s\n' \
+            "VITE_CONTRACT_ADDRESS=${VITE_CONTRACT_ADDRESS}" \
+            "VITE_API_URL=${VITE_API_URL}" \
+            "WALLET_SEED=${WALLET_SEED}" \
+            "GUESS_WHO_CONTRACT_ADDRESS=${GUESS_WHO_CONTRACT_ADDRESS}" \
+            "POSTGRES_URL=${POSTGRES_URL}" \
+            "POOL_TARGET_SIZE=${POOL_TARGET_SIZE}" \
+            "PROOF_SERVER_URL=${PROOF_SERVER_URL}" \
+            > /tmp/server.env
           $SCP /tmp/server.env ec2-user@${EC2_HOST}:/opt/proof-of-spy/.env
 
           # Sync frontend build
