@@ -104,6 +104,13 @@ export class GameScene extends Phaser.Scene {
     this.sound = this.registry.get('sound');
     this.cameras.main.fadeIn(500, 0, 0, 0);
 
+    // Restart theme music if it was stopped (e.g. after result screen)
+    if (!this.registry.get('themeMusic') && this.sys.sound && this.cache.audio.exists('theme')) {
+      const music = this.sys.sound.add('theme', { loop: true, volume: 0.5 });
+      music.play();
+      this.registry.set('themeMusic', music);
+    }
+
     // Compute responsive layout — all build methods use this._L instead of constants
     this._L = this._computeLayout();
     const L = this._L;
@@ -600,40 +607,40 @@ export class GameScene extends Phaser.Scene {
     // Speaker name badges — left and right
     this.dialogNameBadge = this.add.text(bx + PORTRAIT_W / 2, by + portraitH + 2, '', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '6px',
+      fontSize: '7px',
       color: '#00ff41',
       align: 'center',
     }).setOrigin(0.5, 0).setDepth(D + 1);
 
     this._dialogRightNameBadge = this.add.text(RIGHT_X + PORTRAIT_W / 2, by + portraitH + 2, '', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '6px',
+      fontSize: '7px',
       color: '#444444',
       align: 'center',
     }).setOrigin(0.5, 0).setDepth(D + 1);
 
     // Question text line — below the portrait row (spans full width)
-    const textY = by + portraitH + 14;
-    this.dialogLine1 = this.add.text(bx + 4, textY, '', {
+    const textY = by + portraitH + 10;
+    this.dialogLine1 = this.add.text(bx + 6, textY, '', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '6px',
+      fontSize: '8px',
       color: '#005514',
-      wordWrap: { width: bw - 8 },
+      wordWrap: { width: bw - 12 },
     }).setDepth(D + 1);
 
-    this.dialogLine2 = this.add.text(bx + 4, textY + 12, '', {
+    this.dialogLine2 = this.add.text(bx + 6, textY + 16, '', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '7px',
+      fontSize: '9px',
       color: '#39ff14',
-      wordWrap: { width: bw - 8 },
+      wordWrap: { width: bw - 12 },
     }).setDepth(D + 1);
 
     // dialogLine3 — third text line, capped above the YES/NO button row
-    this.dialogLine3 = this.add.text(bx + 4, textY + 24, '', {
+    this.dialogLine3 = this.add.text(bx + 6, textY + 34, '', {
       fontFamily: "'Press Start 2P', monospace",
-      fontSize: '6px',
+      fontSize: '8px',
       color: '#00aa22',
-      wordWrap: { width: bw - 8 },
+      wordWrap: { width: bw - 12 },
     }).setDepth(D + 1);
 
     // Chain verify bar — sits below question text
@@ -797,25 +804,22 @@ export class GameScene extends Phaser.Scene {
       if (this.textures.exists('unknown')) {
         const img = this.add.image(panelCX, panelCY - 4, 'unknown')
           .setDepth(D + 1)
-          .setDisplaySize(PORTRAIT_W - 8, portraitH - 8)
           .setAlpha(isActive ? 1.0 : 0.35);
+        const tex = this.textures.get('unknown').getSourceImage();
+        const scale = Math.min((PORTRAIT_W - 8) / tex.width, (portraitH - 8) / tex.height);
+        img.setScale(scale);
         this[imgKey] = img;
       }
     }
   }
 
-  // Switch left panel to player spy portrait (player is speaking)
+  // Player speaking: player portrait on LEFT (active), unknown on RIGHT (dim)
   _switchDialogToPlayer() {
     const spy = this.characters[this.playerSpyId];
 
-    // Left panel = player (active speaker), right panel = CPU (listener)
-    this._drawPortraitSprite(true, this.playerSpyId, true);
-    this._drawPortraitSprite(false, null, false); // CPU wireface on right
+    this._drawPortraitSprite(true, this.playerSpyId, true);  // player LEFT active
+    this._drawPortraitSprite(false, null, false);             // unknown RIGHT dim
 
-    // Destroy right sprite image if exists
-    if (this._dialogRightImg) { this._dialogRightImg.destroy(); this._dialogRightImg = null; }
-
-    // Active bar side = left
     this._audioBarsActive = 'left';
 
     if (this.dialogNameBadge) {
@@ -828,18 +832,14 @@ export class GameScene extends Phaser.Scene {
     this._dialogMode = 'player';
   }
 
-  // Switch left panel to CPU wireframe face (CPU is speaking)
+  // CPU speaking: unknown on LEFT (active), player portrait on RIGHT (dim)
   _switchDialogToCpu() {
     const spy = this.characters[this.playerSpyId];
 
-    // Left panel = CPU wireface (active speaker), right panel = player (listener)
-    // Destroy left sprite if any
-    if (this._dialogLeftImg) { this._dialogLeftImg.destroy(); this._dialogLeftImg = null; }
-    this._drawPortraitSprite(true, null, true);   // CPU wireface on left (active)
-    this._drawPortraitSprite(false, this.playerSpyId, false); // player portrait on right (dim)
+    this._drawPortraitSprite(true, null, true);               // unknown LEFT active
+    this._drawPortraitSprite(false, this.playerSpyId, false); // player RIGHT dim
 
-    // Active bar side = right (so bars lean toward right portrait)
-    this._audioBarsActive = 'right';
+    this._audioBarsActive = 'left';
 
     if (this.dialogNameBadge) {
       this.dialogNameBadge.setText('UNKNOWN').setColor('#ff4444');
@@ -1236,6 +1236,9 @@ export class GameScene extends Phaser.Scene {
         if (this.state.gameOver) return;
         this.state.timeSeconds--;
         this._updateHUD();
+        if (this.state.timeSeconds <= 10 && this.state.timeSeconds > 0) {
+          if (this.soundSynth) this.soundSynth.countdownBeep(this.state.timeSeconds);
+        }
         if (this.state.timeSeconds <= 0) {
           this.state.timeSeconds = 0;
           this._timeUp();

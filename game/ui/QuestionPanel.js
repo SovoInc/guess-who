@@ -27,6 +27,7 @@ export class QuestionPanel {
     this.disabled = false;
 
     this._buildBottomBar();
+    this._buildArrow();
   }
 
   _buildBottomBar() {
@@ -215,6 +216,69 @@ export class QuestionPanel {
     }
   }
 
+  _buildArrow() {
+    const scene = this.scene;
+    const cx = this.colX + this.colW / 2;
+    const arrowY = this.panelY - 20;
+
+    // Pixelated downward arrow using graphics (3 segments)
+    this._arrowGfx = scene.add.graphics().setDepth(15).setVisible(false);
+    this._arrowBaseY = arrowY;
+    this._arrowOffset = 0;
+
+    const draw = () => {
+      const g = this._arrowGfx;
+      const y = this._arrowBaseY + this._arrowOffset;
+      g.clear();
+      g.fillStyle(0x00ff41, 1);
+      // Body: 10px wide, 14px tall
+      g.fillRect(cx - 5, y - 18, 10, 14);
+      // Arrow head pixel steps (wide → tip), each row 4px tall
+      g.fillRect(cx - 14, y - 4, 28, 4);
+      g.fillRect(cx - 11, y,     22, 4);
+      g.fillRect(cx - 8,  y + 4, 16, 4);
+      g.fillRect(cx - 5,  y + 8, 10, 4);
+      g.fillRect(cx - 2,  y + 12, 4, 4);
+    };
+    this._arrowDraw = draw;
+  }
+
+  _startArrow() {
+    if (this._arrowTween) return;
+    this._arrowGfx.setVisible(true);
+    this._arrowOffset = 0;
+    this._arrowDraw();
+    const proxy = { offset: 0 };
+    const bounce = () => {
+      if (!this._arrowTween) return;
+      this.scene.tweens.add({
+        targets: proxy,
+        offset: 14,
+        duration: 220,
+        ease: 'Quad.easeIn',
+        onUpdate: () => { this._arrowOffset = proxy.offset; this._arrowDraw(); },
+        onComplete: () => {
+          if (!this._arrowTween) return;
+          this.scene.tweens.add({
+            targets: proxy,
+            offset: 0,
+            duration: 160,
+            ease: 'Quad.easeOut',
+            onUpdate: () => { this._arrowOffset = proxy.offset; this._arrowDraw(); },
+            onComplete: () => { this.scene.time.delayedCall(80, bounce); },
+          });
+        },
+      });
+    };
+    this._arrowTween = { active: true, stop: () => {} }; // sentinel
+    bounce();
+  }
+
+  _stopArrow() {
+    this._arrowTween = null; // sentinel check in bounce() stops the chain
+    if (this._arrowGfx) { this._arrowGfx.setVisible(false); this._arrowGfx.clear(); }
+  }
+
   _drawButtons(on) {
     this.buttons.forEach(({ gfx, text, hit }) => {
       const x = hit.x - hit.width / 2;
@@ -232,6 +296,7 @@ export class QuestionPanel {
 
   flash() {
     this.stopFlash();
+    this._startArrow();
     this._blinkState = false;
     this._blinkTimer = this.scene.time.addEvent({
       delay: 400,
@@ -251,6 +316,7 @@ export class QuestionPanel {
     }
     this._blinkState = false;
     this._drawButtons(false);
+    this._stopArrow();
   }
 
   setDisabled(val) {
@@ -279,6 +345,8 @@ export class QuestionPanel {
 
   destroy() {
     this.stopFlash();
+    this._stopArrow();
+    if (this._arrowGfx) { this._arrowGfx.destroy(); this._arrowGfx = null; }
     this._hidePicker();
     this.buttons.forEach(({ gfx, text, hit }) => {
       gfx.destroy(); text.destroy(); hit.destroy();

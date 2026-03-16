@@ -103,10 +103,20 @@ export class SoundSynth {
   }
 
   bootBeep() {
-    this._playTone({ type: 'square', freq: 440, duration: 0.06, gain: 0.1 });
+    this._playTone({ type: 'sine', freq: 320, duration: 0.04, gain: 0.04 });
   }
 
   accessDenied() {
     this._playTone({ type: 'sawtooth', freq: 200, endFreq: 100, duration: 0.3, gain: 0.2 });
+  }
+
+  countdownBeep(secondsLeft) {
+    // Higher pitch / double beep for last 5 seconds
+    if (secondsLeft <= 5) {
+      this._playTone({ type: 'square', freq: 1200, duration: 0.06, gain: 0.18 });
+      this._playTone({ type: 'square', freq: 1200, duration: 0.06, gain: 0.18, delay: 0.1 });
+    } else {
+      this._playTone({ type: 'square', freq: 800, duration: 0.05, gain: 0.14 });
+    }
   }
 }
