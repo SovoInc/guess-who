@@ -172,12 +172,12 @@ export class ResultScene extends Phaser.Scene {
       lines.push({ text: '', color: '#00aa22' });
       lines.push({ text: 'ZK PROOF VERIFIED ON PROOF OF SPY', color: '#00aa22' });
       if (txId) {
-        const txShort = String(txId).slice(0, 20) + '...';
-        lines.push({ text: `TX: ${txShort}`, color: '#006622' });
+        const txShort = String(txId).slice(0, 24) + '...';
+        lines.push({ text: `TX: ${txShort}`, color: '#00cc44' });
       }
       if (proof?.hash) {
-        const hashShort = proof.hash.slice(0, 20) + '...';
-        lines.push({ text: `PROOF: ${hashShort}`, color: '#006622' });
+        const hashShort = proof.hash.slice(0, 24) + '...';
+        lines.push({ text: `PROOF: ${hashShort}`, color: '#00aa22' });
       }
     } else {
       lines.push({ text: spy ? 'THE SPY WAS:' : 'TIME EXPIRED', color: '#ff4444' });
