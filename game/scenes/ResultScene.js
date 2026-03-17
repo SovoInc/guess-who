@@ -29,7 +29,7 @@ export class ResultScene extends Phaser.Scene {
       });
     }
 
-    const { won, spy, score, questionsUsed, timeElapsed, proof, txId, cpuSpy } = this.resultData;
+    const { won, spy, score, questionsUsed, timeElapsed, proof, txId, cpuSpy, playerQuestions, cpuQuestions } = this.resultData;
 
     // Background
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, COLORS.BG);
@@ -51,8 +51,70 @@ export class ResultScene extends Phaser.Scene {
 
     // Animated reveal
     this._typeLines(won, spy, score, questionsUsed, timeElapsed, proof, this.resultData.cpuWon, txId);
+    this._drawQuestionLog(playerQuestions || [], cpuQuestions || []);
 
     applyCRTOverlay(this);
+  }
+
+  _drawQuestionLog(playerQuestions, cpuQuestions) {
+    const panelW = 340;
+    const panelX = 20;
+    const panelY = 280;
+    const rowH = 18;
+    const itemH = 14;
+
+    // Build combined log: player questions then cpu questions
+    const entries = [];
+    playerQuestions.forEach(q => {
+      entries.push({ who: 'YOU', category: q.category, value: q.value, answer: q.answer });
+    });
+    cpuQuestions.forEach(q => {
+      entries.push({ who: 'CPU', category: q.category, value: q.value, answer: q.answer, wasLie: q.wasLie });
+    });
+
+    if (entries.length === 0) return;
+
+    const totalH = 22 + entries.length * rowH + 8;
+
+    // Panel bg
+    const gfx = this.add.graphics();
+    gfx.fillStyle(0x010a01, 0.92);
+    gfx.fillRect(panelX, panelY, panelW, totalH);
+    gfx.lineStyle(1, 0x00aa22, 1);
+    gfx.strokeRect(panelX, panelY, panelW, totalH);
+
+    this.add.text(panelX + 8, panelY + 6, '[ INTERROGATION LOG ]', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '6px',
+      color: '#00ff41',
+    });
+
+    entries.forEach((e, i) => {
+      const ry = panelY + 22 + i * rowH;
+      const whoColor = e.who === 'YOU' ? '#00aa22' : '#ff6600';
+      const ansColor = e.answer === 'YES' ? '#00ff41' : '#ff4444';
+      const val = e.value.replace(/_/g, ' ').toUpperCase();
+      const cat = e.category.replace(/_/g, ' ');
+      const lieTag = e.wasLie ? ' [LIE]' : '';
+
+      this.add.text(panelX + 6, ry, e.who, {
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: '6px',
+        color: whoColor,
+      });
+
+      this.add.text(panelX + 42, ry, `${cat}: ${val}`, {
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: '6px',
+        color: '#006622',
+      });
+
+      this.add.text(panelX + panelW - 8, ry, `${e.answer}${lieTag}`, {
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: '6px',
+        color: e.wasLie ? '#ff4444' : ansColor,
+      }).setOrigin(1, 0);
+    });
   }
 
   _drawCpuSpyPortrait(spy, borderColor) {
