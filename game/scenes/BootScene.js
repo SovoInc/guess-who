@@ -57,8 +57,10 @@ export class BootScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    // Start typing
-    this._typeNextLine();
+    // Wait for web font before typing so layout is stable from the first character
+    document.fonts.ready.then(() => {
+      if (this._active) this._typeNextLine();
+    });
 
     // Any input: if still typing → skip to end; if done → proceed immediately
     const onInput = () => {
