@@ -234,7 +234,19 @@ export class CharacterCard {
 
     this.elimGfx.setVisible(true);
     this.elimX.setVisible(true);
-    this.hitZone.disableInteractive();
+    this.hitZone.setInteractive({ useHandCursor: true }); // keep clickable to undo
+  }
+
+  uneliminate() {
+    if (!this.eliminated) return;
+    this.eliminated = false;
+
+    this._drawBg(COLORS.PANEL_BG, COLORS.DIM);
+    if (this.avatarSprite) this.avatarSprite.setAlpha(1);
+
+    this.elimGfx.setVisible(false);
+    this.elimX.setVisible(false);
+    this.hitZone.setInteractive({ useHandCursor: true });
   }
 
   wobble() {
