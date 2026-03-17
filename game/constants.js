@@ -153,7 +153,7 @@ export function formatQuestion(category, value) {
       if (value === 'goatee')   return 'Does the target have a goatee?';
       return `Does the target have a ${v}?`;
     case 'EYEWEAR':
-      if (value === 'none')    return 'Does the target have clear vision?';
+      if (value === 'none')    return 'Is the target wearing no eyewear?';
       if (value === 'glasses') return 'Is the target wearing glasses?';
       if (value === 'goggles') return 'Is the target wearing goggles?';
       if (value === 'visor')   return 'Is the target wearing a visor?';

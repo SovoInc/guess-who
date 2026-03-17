@@ -10,7 +10,8 @@ import type { WalletContext } from './api.js';
 import { signTransactionIntents, configureProviders, configureGuessWhoProviders, deployGuessWho, createOnChainGame, submitGuessOnChain, getDustBalance } from './api.js';
 import { type Logger } from 'pino';
 import { createSession, answerQuestion, evaluateGuess } from '../../lib/gameManager.js';
-import { recordGameScore, getLeaderboard } from '../../lib/scores.js';
+import { recordGameScore, getLeaderboard, recordGameResult, getPlayerStats, getAllPlayerStats } from '../../lib/scores.js';
+import { awardAchievement, achievementForSpy, getPlayerAchievements, getAllPlayerAchievements, ACHIEVEMENTS } from '../../lib/achievements.js';
 import { claimPoolEntry } from '../../lib/gamePool.js';
 import { runPoolRefill } from './poolWorker.js';
 import { enqueueOnChain } from './onChainQueue.js';
@@ -310,16 +311,68 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
 
   app.post('/api/scores', async (req, res) => {
     try {
-      const { sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct } = req.body as {
+      const { sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct, spyName } = req.body as {
         sessionId: string;
         shieldedAddress: string;
         score: number;
         questionsUsed: number;
         timeElapsed: number;
         correct: boolean;
+        spyName?: string;
       };
+
       await recordGameScore({ session_id: sessionId, shielded_address: shieldedAddress, score, questions_used: questionsUsed, time_elapsed: timeElapsed, correct });
-      res.json({ ok: true });
+      await recordGameResult(shieldedAddress, correct);
+
+      // Check for newly unlocked achievements
+      const newAchievements: Array<{ id: string; name: string; description: string }> = [];
+      if (correct && spyName) {
+        const achId = achievementForSpy(spyName);
+        if (achId) {
+          const unlocked = await awardAchievement(shieldedAddress, achId);
+          if (unlocked) newAchievements.push(unlocked);
+        }
+      }
+
+      res.json({ ok: true, newAchievements });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // ── Player stats & achievements ──
+
+  app.get('/api/players', async (_req, res) => {
+    try {
+      const stats = await getAllPlayerStats();
+      res.json({ players: stats });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get('/api/players/:address/stats', async (req, res) => {
+    try {
+      const stats = await getPlayerStats(req.params.address);
+      res.json(stats || { spies_caught: 0, games_played: 0 });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get('/api/players/:address/achievements', async (req, res) => {
+    try {
+      const achievements = await getPlayerAchievements(req.params.address);
+      res.json({ achievements });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get('/api/achievements', async (_req, res) => {
+    try {
+      const all = await getAllPlayerAchievements();
+      res.json({ definitions: ACHIEVEMENTS, players: all });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }

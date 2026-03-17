@@ -29,10 +29,14 @@ The game is built with Phaser 3 for the frontend and a Node.js sponsor server th
 │  ├── /api/question       (off-chain answer)         │
 │  ├── /api/declare        (ZK proof + on-chain tx)   │
 │  ├── /api/scores         (leaderboard)              │
+│  ├── /api/players        (stats + spy counts)       │
+│  ├── /api/achievements   (all player achievements)  │
 │  └── /api/dust           (wallet balance check)     │
 │                                                     │
 │  lib/gameManager.ts  — session logic                │
 │  lib/gamePool.ts     — pre-generated game pool      │
+│  lib/scores.ts       — leaderboard + player stats   │
+│  lib/achievements.ts — achievement definitions/DB   │
 │  lib/db.ts           — PostgreSQL schema            │
 │  server/src/poolWorker.ts — background pool filler  │
 └──────────┬──────────────────────┬───────────────────┘
@@ -195,7 +199,8 @@ guess-who/
 │   ├── db.ts                       # PostgreSQL schema + queries
 │   ├── gameManager.ts              # Session creation, question answering
 │   ├── gamePool.ts                 # Pre-generated game pool
-│   └── scores.ts                   # Leaderboard
+│   ├── scores.ts                   # Leaderboard + player stats
+│   └── achievements.ts             # Achievement definitions + unlock logic
 ├── server/
 │   └── src/
 │       ├── api.ts                  # Wallet + contract provider setup
@@ -208,6 +213,132 @@ guess-who/
 ├── .env.example
 └── vite.config.ts
 ```
+
+## API Reference
+
+Base URL: `http://games.sovo.com`
+
+All endpoints are JSON over HTTP. No authentication required.
+
+---
+
+### Leaderboard
+
+#### `GET /api/scores`
+
+Returns the top 20 correct guesses, ordered by score (desc) then questions used (asc).
+
+```json
+{
+  "leaderboard": [
+    {
+      "shielded_address": "m...",
+      "score": 950,
+      "questions_used": 3,
+      "time_elapsed": 87,
+      "correct": true,
+      "created_at": "2026-03-17T12:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### Player Stats
+
+#### `GET /api/players`
+
+All players with spy-caught counts and games played.
+
+```json
+{
+  "players": [
+    {
+      "shielded_address": "m...",
+      "spies_caught": 12,
+      "games_played": 20,
+      "updated_at": "2026-03-17T12:00:00Z"
+    }
+  ]
+}
+```
+
+#### `GET /api/players/:address/stats`
+
+Stats for a single player.
+
+```json
+{
+  "spies_caught": 12,
+  "games_played": 20
+}
+```
+
+---
+
+### Achievements
+
+#### `GET /api/achievements`
+
+All achievement definitions and every player's unlocks.
+
+```json
+{
+  "definitions": [
+    { "id": "spy_viper", "name": "Viper Exposed", "description": "Caught Viper as the spy." },
+    { "id": "spy_cipher", "name": "Cipher Cracked", "description": "Caught Cipher as the spy." }
+  ],
+  "players": [
+    {
+      "shielded_address": "m...",
+      "achievements": [
+        {
+          "id": "spy_viper",
+          "name": "Viper Exposed",
+          "description": "Caught Viper as the spy.",
+          "unlocked_at": "2026-03-17T12:00:00Z"
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### `GET /api/players/:address/achievements`
+
+Achievements for a single player.
+
+```json
+{
+  "achievements": [
+    {
+      "id": "spy_viper",
+      "name": "Viper Exposed",
+      "description": "Caught Viper as the spy.",
+      "unlocked_at": "2026-03-17T12:00:00Z"
+    }
+  ]
+}
+```
+
+Achievement IDs follow the pattern `spy_<agentname>` — one per agent in the roster. New achievements can be added to `lib/achievements.ts` without schema changes.
+
+---
+
+### Game Endpoints (internal — called by game client)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/session/start` | Start a new game session |
+| `POST` | `/api/question` | Ask a yes/no question about the spy |
+| `POST` | `/api/declare` | Submit final guess, generate ZK proof on-chain |
+| `POST` | `/api/scores` | Submit game result (triggers achievement checks, returns `newAchievements`) |
+| `GET`  | `/api/status` | Network health (game server, proof server, node, indexer) |
+| `GET`  | `/api/dust` | Sponsor wallet DUST token balance |
+| `GET/POST` | `/api/proof-server` | Get or set proof server mode (`remote` / `local`) |
+
+---
 
 ## Network Comms Panel
 

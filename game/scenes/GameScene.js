@@ -1457,15 +1457,18 @@ export class GameScene extends Phaser.Scene {
         this._hideDeclareLoader();
         this.networkWindow.showProofResult(result.correct, result.onChain?.txId, this.sound);
 
+        let newAchievements = [];
         try {
-          await submitScore(
+          const scoreRes = await submitScore(
             this.sessionId,
             this.walletAddress || 'ANONYMOUS',
             score,
             MAX_QUESTIONS - this.state.questionsLeft,
             TIMER_SECONDS - this.state.timeSeconds,
             result.correct,
+            result.spy?.name || null,
           );
+          newAchievements = scoreRes?.newAchievements || [];
         } catch (e) {}
 
         // Log on-chain result if available
@@ -1484,6 +1487,7 @@ export class GameScene extends Phaser.Scene {
             timeElapsed: TIMER_SECONDS - this.state.timeSeconds,
             proof: result.proof,
             txId: result.onChain?.txId ?? null,
+            newAchievements,
           });
         });
       } catch (e) {

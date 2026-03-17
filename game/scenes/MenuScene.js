@@ -388,7 +388,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   _buildMuteButton(x, y) {
-    const size = 28;
+    const size = 40;
     const gfx = this.add.graphics().setDepth(10);
     const hit = this.add.rectangle(x + size / 2, y + size / 2, size, size, 0, 0)
       .setDepth(11).setInteractive({ useHandCursor: true });
@@ -401,21 +401,45 @@ export class MenuScene extends Phaser.Scene {
       gfx.fillRect(x, y, size, size);
       gfx.lineStyle(1, muted ? 0xff4444 : 0x00ff41, 1);
       gfx.strokeRect(x, y, size, size);
-      // Speaker body
-      const cx = x + 8, cy = y + size / 2;
-      gfx.fillStyle(muted ? 0xff4444 : 0x00ff41, 1);
-      gfx.fillRect(cx, cy - 4, 4, 8);
-      gfx.fillTriangle(cx, cy - 4, cx + 4, cy - 4, cx + 4, cy - 9);
-      gfx.fillTriangle(cx, cy + 4, cx + 4, cy + 4, cx + 4, cy + 9);
-      // Sound waves (or X if muted)
+      // Speaker icon centred in the button
+      const col = muted ? 0xff4444 : 0x00ff41;
+      const cx = x + 7;   // left edge of speaker body
+      const cy = y + size / 2;
+      const bw = 5;  // body rect width
+      const bh = 7;  // body rect half-height
+      const coneW = 7; // cone width
+      gfx.fillStyle(col, 1);
+      // Rectangular body
+      gfx.fillRect(cx, cy - bh, bw, bh * 2);
+      // Forward-facing cone (trapezoid via two triangles)
+      gfx.fillTriangle(
+        cx + bw, cy - bh,
+        cx + bw + coneW, cy - bh - 4,
+        cx + bw + coneW, cy - bh,
+      );
+      gfx.fillRect(cx + bw, cy - bh, coneW, bh * 2);
+      gfx.fillTriangle(
+        cx + bw, cy + bh,
+        cx + bw + coneW, cy + bh,
+        cx + bw + coneW, cy + bh + 4,
+      );
+      // Sound waves or mute X
       if (!muted) {
-        gfx.lineStyle(1, 0x00ff41, 1);
-        gfx.strokeCircle(cx + 8, cy, 4);
-        gfx.strokeCircle(cx + 8, cy, 7);
+        const wx = cx + bw + coneW + 3;
+        gfx.lineStyle(1.5, col, 1);
+        // Small arc
+        gfx.beginPath();
+        gfx.arc(wx, cy, 4, -Math.PI * 0.55, Math.PI * 0.55, false);
+        gfx.strokePath();
+        // Medium arc
+        gfx.beginPath();
+        gfx.arc(wx, cy, 7, -Math.PI * 0.55, Math.PI * 0.55, false);
+        gfx.strokePath();
       } else {
-        gfx.lineStyle(2, 0xff4444, 1);
-        gfx.beginPath(); gfx.moveTo(cx + 7, cy - 4); gfx.lineTo(cx + 13, cy + 4); gfx.strokePath();
-        gfx.beginPath(); gfx.moveTo(cx + 13, cy - 4); gfx.lineTo(cx + 7, cy + 4); gfx.strokePath();
+        const xx = cx + bw + coneW + 3;
+        gfx.lineStyle(2, col, 1);
+        gfx.beginPath(); gfx.moveTo(xx, cy - 5); gfx.lineTo(xx + 6, cy + 5); gfx.strokePath();
+        gfx.beginPath(); gfx.moveTo(xx + 6, cy - 5); gfx.lineTo(xx, cy + 5); gfx.strokePath();
       }
     };
 

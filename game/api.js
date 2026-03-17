@@ -57,14 +57,32 @@ export async function getScores() {
   return res.json(); // { leaderboard: [...] }
 }
 
-export async function submitScore(sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct) {
+export async function submitScore(sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct, spyName = null) {
   const res = await fetch(`${BASE}/api/scores`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct }),
+    body: JSON.stringify({ sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct, spyName }),
   });
   if (!res.ok) throw new Error('Failed to submit score');
-  return res.json();
+  return res.json(); // { ok, newAchievements: [{id, name, description}] }
+}
+
+export async function getPlayerStats(shieldedAddress) {
+  const res = await fetch(`${BASE}/api/players/${encodeURIComponent(shieldedAddress)}/stats`);
+  if (!res.ok) throw new Error('Failed to get player stats');
+  return res.json(); // { spies_caught, games_played }
+}
+
+export async function getPlayerAchievements(shieldedAddress) {
+  const res = await fetch(`${BASE}/api/players/${encodeURIComponent(shieldedAddress)}/achievements`);
+  if (!res.ok) throw new Error('Failed to get achievements');
+  return res.json(); // { achievements: [{id, name, description, unlocked_at}] }
+}
+
+export async function getAllAchievements() {
+  const res = await fetch(`${BASE}/api/achievements`);
+  if (!res.ok) throw new Error('Failed to get achievements');
+  return res.json(); // { definitions, players }
 }
 
 /**
