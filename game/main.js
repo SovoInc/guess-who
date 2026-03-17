@@ -17,8 +17,9 @@ export function createGame(parent) {
       disableWebAudio: false,
     },
     render: {
-      pixelArt: false,
-      antialias: true,
+      pixelArt: true,
+      antialias: false,
+      antialiasGL: false,
     },
     scale: {
       mode: Phaser.Scale.FIT,
