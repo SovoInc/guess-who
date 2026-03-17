@@ -1,13 +1,9 @@
 // Semaphore-based concurrency control for on-chain transactions.
-// Each dust coin can fund one transaction at a time. We allow up to
-// MAX_CONCURRENT transactions in parallel (one per available dust coin).
+// We have a single DUST coin so only one transaction can run at a time.
 // User transactions (declare) take priority over pool refill transactions.
-// Pool refills are capped at MAX_CONCURRENT-1 so there is always a free
-// slot available for an incoming user declare — preventing declare from
-// blocking behind a slow (~4min) pool refill proof.
 
-const MAX_CONCURRENT = 2;
-const MAX_POOL_CONCURRENT = MAX_CONCURRENT - 1; // pool may only use 1 slot
+const MAX_CONCURRENT = 1;
+const MAX_POOL_CONCURRENT = MAX_CONCURRENT; // pool can use the slot, user declares take priority
 
 let inFlight = 0;
 let poolInFlight = 0;
