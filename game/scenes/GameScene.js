@@ -330,6 +330,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (s.eliminated.has(character.id)) {
+      // Click again to undo elimination
+      s.eliminated.delete(character.id);
+      this.cards[character.id].uneliminate();
+      this.networkWindow.log(`RESTORED: ${character.name}`, '#888888');
+      this._updateHUD();
+      return;
+    }
+
     if (!s.eliminated.has(character.id)) {
       s.eliminated.add(character.id);
       this.cards[character.id].eliminate();
