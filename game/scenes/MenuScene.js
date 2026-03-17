@@ -364,6 +364,16 @@ export class MenuScene extends Phaser.Scene {
       this._renderDropdown();
     });
     this._dropdownObjs.push(remoteGfx, remoteText, remoteHit);
+
+    // URL label below the toggle buttons
+    const urlY = toggleY + 24;
+    const urlStr = isLocal ? 'localhost:6300' : 'proof.games.sovo.com';
+    const urlText = this.add.text(panelX + 10, urlY, urlStr, {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '6px',
+      color: '#00cc44',
+    }).setDepth(21);
+    this._dropdownObjs.push(urlText);
   }
 
   _closeNetworkDropdown() {
@@ -611,7 +621,13 @@ export class MenuScene extends Phaser.Scene {
     this.menuReady = false;
     this._closeOverlay();
     this._openOverlay('ABOUT', (panel, startY) => {
-      const lines = [
+      const colW = panel.w / 2 - 24;
+      const col1X = panel.x + 16;
+      const col2X = panel.x + panel.w / 2 + 8;
+      const lh = 20;
+      const headers = new Set(['PROOF OF SPY', 'QUESTION VERIFICATION:', 'FINAL DECLARATION:', 'CONTROLS:']);
+
+      const col1 = [
         'PROOF OF SPY',
         '',
         'IDENTIFY THE HIDDEN SPY AMONG',
@@ -619,28 +635,60 @@ export class MenuScene extends Phaser.Scene {
         'ZERO-KNOWLEDGE PROOFS.',
         '',
         'QUESTION VERIFICATION:',
-        'SIMULATED ON-DEVICE. ANSWERS ARE',
-        'CHECKED LOCALLY AND LOGGED TO',
-        'THE SECURE CHANNEL FOR GAMEPLAY.',
+        'ANSWERS ARE CHECKED LOCALLY',
+        'ON-DEVICE AND LOGGED TO THE',
+        'SECURE CHANNEL FOR GAMEPLAY.',
         '',
         'FINAL DECLARATION:',
-        'YOUR GUESS IS VERIFIED ON-CHAIN',
-        'VIA A MIDNIGHT ZERO-KNOWLEDGE',
-        'PROOF — WITHOUT REVEALING THE',
-        'SPY IDENTITY UNTIL YOU DECLARE.',
-        '',
+        'YOUR GUESS IS VERIFIED',
+        'ON-CHAIN VIA A MIDNIGHT',
+        'ZERO-KNOWLEDGE PROOF —',
+        'WITHOUT REVEALING THE SPY',
+        'UNTIL YOU DECLARE.',
+      ];
+
+      const col2 = [
         'CONTROLS:',
-        'CLICK CATEGORY BUTTONS TO ASK',
-        'CLICK CARDS TO ELIMINATE',
+        '',
+        'CLICK CATEGORY BUTTONS',
+        'TO ASK A QUESTION',
+        '',
+        'CLICK AGENT CARDS',
+        'TO ELIMINATE SUSPECTS',
+        '',
+        'CLICK ELIMINATED CARD',
+        'AGAIN TO RESTORE THEM',
+        '',
         'DECLARE SPY WHEN CERTAIN',
         '',
-        'POWERED BY MIDNIGHT NETWORK',
+        '',
+        'POWERED BY',
+        'MIDNIGHT NETWORK',
       ];
-      lines.forEach((line, i) => {
-        this.add.text(panel.x + 16, startY + i * 22, line, {
+
+      col1.forEach((line, i) => {
+        this.add.text(col1X, startY + i * lh, line, {
           fontFamily: "'Press Start 2P', monospace",
-          fontSize: '9px',
-          color: line === 'PROOF OF SPY' || line === 'CONTROLS:' || line === 'QUESTION VERIFICATION:' || line === 'FINAL DECLARATION:' ? '#00ff41' : '#00aa22',
+          fontSize: '7px',
+          color: headers.has(line) ? '#00ff41' : '#00aa22',
+          wordWrap: { width: colW },
+        });
+      });
+
+      // Vertical divider — use a 1px wide text char as a line (proxy only covers add.text)
+      this.add.text(panel.x + panel.w / 2 - 1, startY - 4, '|\n|\n|\n|\n|\n|\n|\n|\n|\n|\n|\n|\n|\n|\n|\n|\n|', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#003300',
+        lineSpacing: 4,
+      });
+
+      col2.forEach((line, i) => {
+        this.add.text(col2X, startY + i * lh, line, {
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '7px',
+          color: headers.has(line) ? '#00ff41' : '#00aa22',
+          wordWrap: { width: colW },
         });
       });
     });
