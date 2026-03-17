@@ -237,6 +237,22 @@ export class CharacterCard {
     this.hitZone.disableInteractive();
   }
 
+  wobble() {
+    if (this._wobbling) return;
+    this._wobbling = true;
+    const container = this.container;
+    const origX = container.x;
+    this.scene.tweens.add({
+      targets: container,
+      x: { from: origX - 4, to: origX + 4 },
+      duration: 60,
+      yoyo: true,
+      repeat: 4,
+      ease: 'Sine.easeInOut',
+      onComplete: () => { container.x = origX; this._wobbling = false; },
+    });
+  }
+
   setPulsing(active) {
     this.pulsing = active;
     if (active) {

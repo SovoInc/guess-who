@@ -319,6 +319,17 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (character.id === this.playerSpyId) {
+      // Can't eliminate own spy — wobble and flash codec message
+      this.cards[character.id].wobble();
+      this._switchDialogToPlayer();
+      if (this.dialogLine1) this.dialogLine1.setText('[ PROTECT ASSET ]').setColor('#ffaa00');
+      if (this.dialogLine2) this.dialogLine2.setText(`${character.name.toUpperCase()} IS YOUR AGENT`).setColor('#ffaa00');
+      if (this.dialogLine3) this.dialogLine3.setText('DO NOT EXPOSE THEM').setColor('#886600');
+      this.time.delayedCall(2500, () => { this._setDialogIdle(); });
+      return;
+    }
+
     if (!s.eliminated.has(character.id)) {
       s.eliminated.add(character.id);
       this.cards[character.id].eliminate();
@@ -1322,7 +1333,12 @@ export class GameScene extends Phaser.Scene {
         if (this.dialogLine1) this.dialogLine1.setText('[ RESPONSE ]').setColor('#ff6600');
         this._typeDialogText(this.dialogLine2, `→ ${answer}`, color, () => {
           this._runChainVerify(answerBool, () => {
-            this.networkWindow.log(`⛓ CHAIN: ${answerBool ? 'CONFIRMED' : 'NEGATIVE'}`, answerBool ? '#00ff41' : '#ff4444');
+            const valDisplay = value.replace(/_/g, ' ').toUpperCase();
+            if (answerBool) {
+              this.networkWindow.log(`⛓ SPY HAS ${valDisplay} — ELIMINATE OTHERS`, '#00ff41');
+            } else {
+              this.networkWindow.log(`⛓ SPY HAS NO ${valDisplay} — ELIMINATE MATCHES`, '#ff8800');
+            }
 
             // Compute which non-eliminated cards this intel says should be X'd out
             // YES → eliminate agents that DON'T match; NO → eliminate agents that DO match
@@ -1473,57 +1489,91 @@ export class GameScene extends Phaser.Scene {
   _showDeclareLoader() {
     if (this._declareLoader) return;
     const W = this._L.gameW, H = this._L.gameH;
-    const bg = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.72).setDepth(50);
-    const label = this.add.text(W / 2, H / 2 - 24, 'SUBMITTING PROOF TO CHAIN', {
+
+    const bg = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.82).setDepth(50);
+
+    const title = this.add.text(W / 2, H / 2 - 80, 'SUBMITTING ZK PROOF TO CHAIN', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '10px',
       color: '#00ff41',
       align: 'center',
     }).setOrigin(0.5).setDepth(51);
 
-    const dots = this.add.text(W / 2, H / 2, '...', {
-      fontFamily: "'Press Start 2P', monospace",
-      fontSize: '14px',
-      color: '#39ff14',
-    }).setOrigin(0.5).setDepth(51);
-
     // Spinning bracket animation
     const frames = ['[    ]', '[>   ]', '[>>  ]', '[>>> ]', '[>>>>]', '[ >>>]', '[  >>]', '[   >]'];
     let fi = 0;
-    const spinner = this.add.text(W / 2, H / 2 + 28, frames[0], {
+    const spinner = this.add.text(W / 2, H / 2 - 54, frames[0], {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '11px',
       color: '#00aa22',
     }).setOrigin(0.5).setDepth(51);
 
-    const timer = this.time.addEvent({
-      delay: 120,
+    const spinTimer = this.time.addEvent({
+      delay: 120, loop: true,
+      callback: () => { fi = (fi + 1) % frames.length; spinner.setText(frames[fi]); },
+    });
+
+    // Divider line
+    const divGfx = this.add.graphics().setDepth(51);
+    divGfx.lineStyle(1, 0x003300, 1);
+    divGfx.beginPath();
+    divGfx.moveTo(W / 2 - 260, H / 2 - 36);
+    divGfx.lineTo(W / 2 + 260, H / 2 - 36);
+    divGfx.strokePath();
+
+    // Rotating ZK education hints
+    const hints = [
+      { head: 'ZERO KNOWLEDGE PROOFS', body: 'YOUR GUESS IS VERIFIED WITHOUT\nREVEALING WHO THE SPY IS.' },
+      { head: 'DATA STAYS PRIVATE', body: 'THE SPY IDENTITY NEVER LEAVES\nYOUR DEVICE UNENCRYPTED.' },
+      { head: 'CRYPTOGRAPHIC COMMITMENT', body: 'YOUR GUESS WAS COMMITTED ON-CHAIN\nBEFORE THE RESULT IS REVEALED.' },
+      { head: 'ON-CHAIN VERIFICATION', body: 'THE MIDNIGHT NETWORK VALIDATES\nTHE PROOF — NOT A CENTRAL SERVER.' },
+      { head: 'TRUSTLESS BY DESIGN', body: 'NO ONE CAN FAKE A CORRECT GUESS.\nMATH ENFORCES THE RULES.' },
+      { head: 'PROOF GENERATION', body: 'A ZK CIRCUIT PROVES YOU KNEW\nTHE ANSWER WITHOUT SHOWING IT.' },
+    ];
+    let hi = 0;
+
+    const hintHead = this.add.text(W / 2, H / 2 - 16, hints[0].head, {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '8px',
+      color: '#39ff14',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(51);
+
+    const hintBody = this.add.text(W / 2, H / 2 + 12, hints[0].body, {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '7px',
+      color: '#006622',
+      align: 'center',
+      lineSpacing: 6,
+    }).setOrigin(0.5).setDepth(51);
+
+    const hintTimer = this.time.addEvent({
+      delay: 3200,
       loop: true,
       callback: () => {
-        fi = (fi + 1) % frames.length;
-        spinner.setText(frames[fi]);
+        hi = (hi + 1) % hints.length;
+        this.tweens.add({
+          targets: [hintHead, hintBody],
+          alpha: 0,
+          duration: 300,
+          onComplete: () => {
+            hintHead.setText(hints[hi].head);
+            hintBody.setText(hints[hi].body);
+            this.tweens.add({ targets: [hintHead, hintBody], alpha: 1, duration: 300 });
+          },
+        });
       },
     });
 
-    // Dot pulse
-    let dc = 0;
-    const dotTimer = this.time.addEvent({
-      delay: 500,
-      loop: true,
-      callback: () => {
-        dc = (dc + 1) % 4;
-        dots.setText('.'.repeat(dc) || '');
-      },
-    });
-
-    this._declareLoader = { bg, label, dots, spinner, timer, dotTimer };
+    this._declareLoader = { bg, title, spinner, divGfx, hintHead, hintBody, spinTimer, hintTimer };
   }
 
   _hideDeclareLoader() {
     if (!this._declareLoader) return;
-    const { bg, label, dots, spinner, timer, dotTimer } = this._declareLoader;
-    timer.remove(); dotTimer.remove();
-    bg.destroy(); label.destroy(); dots.destroy(); spinner.destroy();
+    const { bg, title, spinner, divGfx, hintHead, hintBody, spinTimer, hintTimer } = this._declareLoader;
+    spinTimer.remove(); hintTimer.remove();
+    bg.destroy(); title.destroy(); spinner.destroy(); divGfx.destroy();
+    hintHead.destroy(); hintBody.destroy();
     this._declareLoader = null;
   }
 

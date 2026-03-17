@@ -225,7 +225,6 @@ export class MenuScene extends Phaser.Scene {
   _toggleNetworkDropdown(btn) {
     if (this._netDropdownOpen) {
       this._closeNetworkDropdown();
-      btn.setColor('#00aa22');
     } else {
       this._netDropdownOpen = true;
       btn.setColor('#00ff41');
@@ -244,7 +243,6 @@ export class MenuScene extends Phaser.Scene {
         if (pointer.x >= panelX && pointer.x <= panelX + panelW + PAD &&
             pointer.y >= startY && pointer.y <= startY + panelH) return;
         this._closeNetworkDropdown();
-        btn.setColor('#ff4444');
       };
       this.input.on('pointerdown', this._outsideClickHandler);
     }
@@ -377,6 +375,15 @@ export class MenuScene extends Phaser.Scene {
       this.input.off('pointerdown', this._outsideClickHandler);
       this._outsideClickHandler = null;
     }
+    this._restoreNetBtnColor();
+  }
+
+  _restoreNetBtnColor() {
+    if (!this._netStatusBtn) return;
+    const s = this._lastNetStatus;
+    if (!s) { this._netStatusBtn.setColor('#00aa22'); return; }
+    const allOk = s.gameServer && s.proofServer && s.node && s.indexer;
+    this._netStatusBtn.setColor(allOk ? '#00ff41' : '#ff8800');
   }
 
   _isDisabled(i) {
