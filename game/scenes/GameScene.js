@@ -1784,7 +1784,7 @@ export class GameScene extends Phaser.Scene {
     objs.push(overlay);
 
     // Panel
-    const pw = 220, ph = 140;
+    const pw = 220, ph = 164;
     const px = gameW / 2 - pw / 2, py = gameH / 2 - ph / 2;
     const panel = this.add.graphics().setDepth(51);
     panel.fillStyle(COLORS.PANEL_BG, 1);
@@ -1802,11 +1802,15 @@ export class GameScene extends Phaser.Scene {
     objs.push(title);
 
     // Resume button
-    const resumeBtn = this._makePauseButton(gameW / 2, py + 62, 'RESUME', '#00ff41', () => this._hidePauseMenu());
+    const resumeBtn = this._makePauseButton(gameW / 2, py + 54, 'RESUME', '#00ff41', () => this._hidePauseMenu());
     objs.push(...resumeBtn);
 
+    // Mute toggle button
+    const muteObjs = this._makeMuteToggle(gameW / 2, py + 84);
+    objs.push(...muteObjs);
+
     // Quit button
-    const quitBtn = this._makePauseButton(gameW / 2, py + 100, 'QUIT MISSION', '#ff4444', () => {
+    const quitBtn = this._makePauseButton(gameW / 2, py + 114, 'QUIT MISSION', '#ff4444', () => {
       this.cameras.main.fadeOut(400, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start('MenuScene');
@@ -1833,6 +1837,48 @@ export class GameScene extends Phaser.Scene {
     hit.on('pointerover', () => { bg.clear(); bg.fillStyle(0x003300, 1); bg.fillRect(x - bw / 2, y - bh / 2, bw, bh); bg.lineStyle(1, color, 1); bg.strokeRect(x - bw / 2, y - bh / 2, bw, bh); });
     hit.on('pointerout',  () => { bg.clear(); bg.fillStyle(0x001800, 1); bg.fillRect(x - bw / 2, y - bh / 2, bw, bh); bg.lineStyle(1, color, 1); bg.strokeRect(x - bw / 2, y - bh / 2, bw, bh); });
     hit.on('pointerdown', () => { if (this.sound) this.sound.click(); onClick(); });
+
+    return [bg, txt, hit];
+  }
+
+  _makeMuteToggle(x, y) {
+    const bw = 160, bh = 22;
+    const bg = this.add.graphics().setDepth(52);
+    const music = this.registry.get('themeMusic');
+
+    const isMuted = () => !music || music.volume === 0 || !music.isPlaying;
+
+    const draw = () => {
+      const muted = isMuted();
+      bg.clear();
+      bg.fillStyle(muted ? 0x1a0000 : 0x001800, 1);
+      bg.fillRect(x - bw / 2, y - bh / 2, bw, bh);
+      bg.lineStyle(1, muted ? 0xff4444 : 0x00ff41, 1);
+      bg.strokeRect(x - bw / 2, y - bh / 2, bw, bh);
+    };
+    draw();
+
+    const muted = isMuted();
+    const txt = this.add.text(x, y, muted ? '♪ MUSIC: OFF' : '♪ MUSIC: ON', {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '8px',
+      color: muted ? '#ff4444' : '#00ff41',
+    }).setOrigin(0.5).setDepth(53);
+
+    const hit = this.add.rectangle(x, y, bw, bh, 0, 0).setInteractive({ useHandCursor: true }).setDepth(54);
+    hit.on('pointerdown', () => {
+      if (this.sound) this.sound.click();
+      if (!music) return;
+      if (!isMuted()) {
+        music.setVolume(0);
+        txt.setText('♪ MUSIC: OFF').setColor('#ff4444');
+      } else {
+        music.setVolume(0.5);
+        if (!music.isPlaying) music.play();
+        txt.setText('♪ MUSIC: ON').setColor('#00ff41');
+      }
+      draw();
+    });
 
     return [bg, txt, hit];
   }
