@@ -357,17 +357,16 @@ export class MenuScene extends Phaser.Scene {
     this._reticleLocked = false;
     this._reticleTarget = target;
 
-    // Lock on after 600ms — enough time for reticle to travel and settle
-    this.time.delayedCall(600, () => {
+    this._huntTimer1 = this.time.delayedCall(600, () => {
       if (!this._reticleGfx || !this._reticleGfx.scene || this._reticleLocked) return;
       this._reticleLocked = true;
       this._typeReticleScan(this._reticleTarget.charDef);
 
-      this.time.delayedCall(Phaser.Math.Between(1600, 2400), () => {
+      this._huntTimer2 = this.time.delayedCall(Phaser.Math.Between(1600, 2400), () => {
         if (!this._reticleGfx || !this._reticleGfx.scene) return;
         this._reticleLocked = false;
         this._clearScanLines();
-        this.time.delayedCall(200, () => {
+        this._huntTimer3 = this.time.delayedCall(200, () => {
           if (!this._reticleGfx || !this._reticleGfx.scene) return;
           this._reticleHuntNext();
         });
@@ -1078,8 +1077,17 @@ export class MenuScene extends Phaser.Scene {
       this._matrixUpdateEvent.remove();
       this._matrixUpdateEvent = null;
     }
+    if (this._huntTimer1) { this._huntTimer1.remove(); this._huntTimer1 = null; }
+    if (this._huntTimer2) { this._huntTimer2.remove(); this._huntTimer2 = null; }
+    if (this._huntTimer3) { this._huntTimer3.remove(); this._huntTimer3 = null; }
     this._matrixSprites = null;
     this._reticleTarget = null;
+    this._scanLines = null;
+    this.input.keyboard.off('keydown-UP');
+    this.input.keyboard.off('keydown-DOWN');
+    this.input.keyboard.off('keydown-W');
+    this.input.keyboard.off('keydown-S');
+    this.input.keyboard.off('keydown-ENTER');
   }
 
   _closeOverlay() {

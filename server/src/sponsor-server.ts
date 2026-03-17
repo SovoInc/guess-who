@@ -23,8 +23,16 @@ let guessWhoProvidersGlobal: any = null;
 let configGlobal: import('./config.js').Config | null = null;
 let sharedContractAddress: string | null = null;
 
-// In-memory map from sessionId -> on-chain game_id (bigint)
-const sessionGameIds = new Map<string, bigint>();
+// In-memory map from sessionId -> on-chain game_id (bigint) + creation time for TTL cleanup
+const sessionGameIds = new Map<string, { gameId: bigint; createdAt: number }>();
+
+// Clean up abandoned sessions every 10 minutes (TTL = 1 hour)
+setInterval(() => {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  for (const [id, entry] of sessionGameIds.entries()) {
+    if (entry.createdAt < cutoff) sessionGameIds.delete(id);
+  }
+}, 10 * 60 * 1000).unref();
 
 export function setSponsorLogger(_logger: Logger): void {
   logger = _logger;
@@ -147,7 +155,7 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
             };
             const onChain = await enqueueOnChain(() => createOnChainGame(guessWhoProvidersGlobal, sharedContractAddress!, privateState));
             gameId = onChain.gameId.toString();
-            sessionGameIds.set(tempSession.sessionId, onChain.gameId);
+            sessionGameIds.set(tempSession.sessionId, { gameId: onChain.gameId, createdAt: Date.now() });
             logger.info(`On-chain game created on demand: game_id=${gameId}`);
             // Return the already-created session
             res.json({
@@ -169,7 +177,7 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
       logger.info(`Session created: ${result.sessionId}, spyId: ${result.spyId}`);
 
       if (gameId) {
-        sessionGameIds.set(result.sessionId, BigInt(gameId));
+        sessionGameIds.set(result.sessionId, { gameId: BigInt(gameId), createdAt: Date.now() });
       }
 
       res.json({
@@ -213,7 +221,7 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
       if (result === null) return res.status(404).json({ error: 'Session not found' });
 
       let onChain: { correct: boolean; txId: string } | null = null;
-      const onChainGameId = gameId != null ? BigInt(gameId) : sessionGameIds.get(sessionId);
+      const onChainGameId = gameId != null ? BigInt(gameId) : sessionGameIds.get(sessionId)?.gameId;
 
       if (contractAddress && onChainGameId != null && result.session) {
         try {

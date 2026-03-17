@@ -1505,7 +1505,16 @@ export class GameScene extends Phaser.Scene {
 
     const bg = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.82).setDepth(50);
 
-    const title = this.add.text(W / 2, H / 2 - 80, 'SUBMITTING ZK PROOF TO CHAIN', {
+    // Declare scene image
+    const imgH = 160;
+    const imgW = imgH * (4 / 3); // original is 4:3 landscape
+    const declareImg = this.textures.exists('declare')
+      ? this.add.image(W / 2, H / 2 - 148, 'declare')
+          .setDisplaySize(imgW, imgH)
+          .setDepth(51)
+      : null;
+
+    const title = this.add.text(W / 2, H / 2 - 56, 'SUBMITTING ZK PROOF TO CHAIN', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '10px',
       color: '#00ff41',
@@ -1515,7 +1524,7 @@ export class GameScene extends Phaser.Scene {
     // Spinning bracket animation
     const frames = ['[    ]', '[>   ]', '[>>  ]', '[>>> ]', '[>>>>]', '[ >>>]', '[  >>]', '[   >]'];
     let fi = 0;
-    const spinner = this.add.text(W / 2, H / 2 - 54, frames[0], {
+    const spinner = this.add.text(W / 2, H / 2 - 30, frames[0], {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '11px',
       color: '#00aa22',
@@ -1530,8 +1539,8 @@ export class GameScene extends Phaser.Scene {
     const divGfx = this.add.graphics().setDepth(51);
     divGfx.lineStyle(1, 0x003300, 1);
     divGfx.beginPath();
-    divGfx.moveTo(W / 2 - 260, H / 2 - 36);
-    divGfx.lineTo(W / 2 + 260, H / 2 - 36);
+    divGfx.moveTo(W / 2 - 260, H / 2 - 10);
+    divGfx.lineTo(W / 2 + 260, H / 2 - 10);
     divGfx.strokePath();
 
     // Rotating ZK education hints
@@ -1545,14 +1554,14 @@ export class GameScene extends Phaser.Scene {
     ];
     let hi = 0;
 
-    const hintHead = this.add.text(W / 2, H / 2 - 16, hints[0].head, {
+    const hintHead = this.add.text(W / 2, H / 2 + 10, hints[0].head, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '8px',
       color: '#39ff14',
       align: 'center',
     }).setOrigin(0.5).setDepth(51);
 
-    const hintBody = this.add.text(W / 2, H / 2 + 12, hints[0].body, {
+    const hintBody = this.add.text(W / 2, H / 2 + 38, hints[0].body, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '7px',
       color: '#006622',
@@ -1580,15 +1589,16 @@ export class GameScene extends Phaser.Scene {
       },
     });
 
-    this._declareLoader = { bg, title, spinner, divGfx, hintHead, hintBody, spinTimer, hintTimer };
+    this._declareLoader = { bg, title, spinner, divGfx, hintHead, hintBody, spinTimer, hintTimer, declareImg };
   }
 
   _hideDeclareLoader() {
     if (!this._declareLoader) return;
-    const { bg, title, spinner, divGfx, hintHead, hintBody, spinTimer, hintTimer } = this._declareLoader;
+    const { bg, title, spinner, divGfx, hintHead, hintBody, spinTimer, hintTimer, declareImg } = this._declareLoader;
     spinTimer.remove(); hintTimer.remove();
     bg.destroy(); title.destroy(); spinner.destroy(); divGfx.destroy();
     hintHead.destroy(); hintBody.destroy();
+    if (declareImg) declareImg.destroy();
     this._declareLoader = null;
   }
 
@@ -1914,6 +1924,8 @@ export class GameScene extends Phaser.Scene {
   shutdown() {
     if (this.timerEvent) this.timerEvent.remove();
     if (this.cpuTurnTimer) this.cpuTurnTimer.remove();
+    if (this._dialogTypeTimer) { this._dialogTypeTimer.remove(); this._dialogTypeTimer = null; }
+    if (this._declareLoader) this._hideDeclareLoader();
     this._pauseObjects?.forEach(o => o.destroy());
     this._pauseObjects = [];
     this.cards?.forEach(c => c.destroy());

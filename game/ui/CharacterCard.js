@@ -128,13 +128,13 @@ export class CharacterCard {
     drawSig();
 
     // Fluctuate signal every 1.5–3s
+    this._fluctuateTimer = null;
     const fluctuate = () => {
       const delay = 1500 + Math.random() * 1500;
-      scene.time.addEvent({
+      this._fluctuateTimer = scene.time.addEvent({
         delay,
         callback: () => {
           if (!this.sigGfx || !this.sigGfx.scene) return;
-          // Drift ±1 bar, stay in range 1–5
           const drift = Math.random() < 0.5 ? -1 : 1;
           this._sigBars = Math.max(1, Math.min(barCount, this._sigBars + drift));
           drawSig();
@@ -149,13 +149,14 @@ export class CharacterCard {
     // CRT glitch — random scanline flash (no position shift)
     this.glitchGfx = scene.add.graphics();
     this.container.add(this.glitchGfx);
+    this._glitchTimer = null;
+    this._glitchClearTimer = null;
     const scheduleGlitch = () => {
       const delay = 5000 + Math.random() * 10000;
-      scene.time.addEvent({
+      this._glitchTimer = scene.time.addEvent({
         delay,
         callback: () => {
           if (!this.glitchGfx || !this.glitchGfx.scene) return;
-          // Flash 2-4 random horizontal bands
           this.glitchGfx.clear();
           const bands = 2 + Math.floor(Math.random() * 3);
           for (let b = 0; b < bands; b++) {
@@ -164,7 +165,7 @@ export class CharacterCard {
             this.glitchGfx.fillStyle(0x00ff41, 0.25 + Math.random() * 0.3);
             this.glitchGfx.fillRect(0, gy, cw, gh);
           }
-          scene.time.addEvent({
+          this._glitchClearTimer = scene.time.addEvent({
             delay: 60,
             callback: () => {
               if (this.glitchGfx && this.glitchGfx.scene) this.glitchGfx.clear();
@@ -339,6 +340,9 @@ export class CharacterCard {
   }
 
   destroy() {
+    if (this._fluctuateTimer) { this._fluctuateTimer.remove(); this._fluctuateTimer = null; }
+    if (this._glitchTimer) { this._glitchTimer.remove(); this._glitchTimer = null; }
+    if (this._glitchClearTimer) { this._glitchClearTimer.remove(); this._glitchClearTimer = null; }
     this.container.destroy();
   }
 }
