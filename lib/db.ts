@@ -66,4 +66,23 @@ async function _initSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS player_stats (
+      shielded_address TEXT PRIMARY KEY,
+      spies_caught INTEGER NOT NULL DEFAULT 0,
+      games_played INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS player_achievements (
+      shielded_address TEXT NOT NULL,
+      achievement_id TEXT NOT NULL,
+      unlocked_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (shielded_address, achievement_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS player_achievements_address_idx ON player_achievements (shielded_address)`).catch(() => {});
 }

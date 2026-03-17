@@ -29,7 +29,7 @@ export class ResultScene extends Phaser.Scene {
       });
     }
 
-    const { won, spy, score, questionsUsed, timeElapsed, proof, txId, cpuSpy, playerQuestions, cpuQuestions } = this.resultData;
+    const { won, spy, score, questionsUsed, timeElapsed, proof, txId, cpuSpy, playerQuestions, cpuQuestions, newAchievements } = this.resultData;
 
     // Background
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, COLORS.BG);
@@ -52,6 +52,10 @@ export class ResultScene extends Phaser.Scene {
     // Animated reveal
     this._typeLines(won, spy, score, questionsUsed, timeElapsed, proof, this.resultData.cpuWon, txId);
     this._drawQuestionLog(playerQuestions || [], cpuQuestions || []);
+
+    if (newAchievements && newAchievements.length > 0) {
+      this._showAchievements(newAchievements);
+    }
 
     applyCRTOverlay(this);
   }
@@ -263,6 +267,86 @@ export class ResultScene extends Phaser.Scene {
       this.cameras.main.fadeOut(400, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start('MenuScene');
+      });
+    });
+  }
+
+  _showAchievements(achievements) {
+    const POPUP_W = 280;
+    const POPUP_H = 52;
+    const POPUP_X = GAME_WIDTH / 2 - POPUP_W / 2;
+    const START_Y = -POPUP_H - 10; // off screen top
+    const LAND_Y  = 18;
+    const STACK_GAP = POPUP_H + 6;
+
+    achievements.forEach((ach, i) => {
+      const delay = 800 + i * 600;
+      this.time.delayedCall(delay, () => {
+        const depth = 60 + i;
+        const container = this.add.container(POPUP_X, START_Y).setDepth(depth);
+
+        // Background
+        const bg = this.add.graphics();
+        bg.fillStyle(0x000d00, 0.97);
+        bg.fillRect(0, 0, POPUP_W, POPUP_H);
+        bg.lineStyle(2, 0xffd700, 1);
+        bg.strokeRect(0, 0, POPUP_W, POPUP_H);
+        bg.lineStyle(1, 0xffd700, 0.3);
+        bg.strokeRect(2, 2, POPUP_W - 4, POPUP_H - 4);
+        container.add(bg);
+
+        // Trophy icon
+        const trophy = this.add.text(10, POPUP_H / 2, '★', {
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '14px',
+          color: '#ffd700',
+        }).setOrigin(0, 0.5);
+        container.add(trophy);
+
+        // "ACHIEVEMENT UNLOCKED" label
+        const label = this.add.text(32, 10, 'ACHIEVEMENT UNLOCKED', {
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '5px',
+          color: '#ffd700',
+        });
+        container.add(label);
+
+        // Achievement name
+        const name = this.add.text(32, 24, ach.name.toUpperCase(), {
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '8px',
+          color: '#00ff41',
+        });
+        container.add(name);
+
+        // Description
+        const desc = this.add.text(32, 38, ach.description, {
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '5px',
+          color: '#006622',
+        });
+        container.add(desc);
+
+        // Slide in
+        const targetY = LAND_Y + i * STACK_GAP;
+        this.tweens.add({
+          targets: container,
+          y: targetY,
+          duration: 350,
+          ease: 'Back.easeOut',
+        });
+
+        // Auto-dismiss after 4s
+        this.time.delayedCall(4000, () => {
+          this.tweens.add({
+            targets: container,
+            y: START_Y,
+            alpha: 0,
+            duration: 400,
+            ease: 'Quad.easeIn',
+            onComplete: () => container.destroy(),
+          });
+        });
       });
     });
   }
