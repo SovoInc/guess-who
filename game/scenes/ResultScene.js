@@ -171,10 +171,6 @@ export class ResultScene extends Phaser.Scene {
       lines.push({ text: spy ? spy.name : 'UNKNOWN', color: '#00ff41', large: true });
       lines.push({ text: '', color: '#00aa22' });
       lines.push({ text: 'ZK PROOF VERIFIED ON PROOF OF SPY', color: '#00aa22' });
-      if (txId) {
-        const txShort = String(txId).slice(0, 24) + '...';
-        lines.push({ text: `TX: ${txShort}`, color: '#00cc44' });
-      }
       if (proof?.hash) {
         const hashShort = proof.hash.slice(0, 24) + '...';
         lines.push({ text: `PROOF: ${hashShort}`, color: '#00aa22' });
@@ -193,6 +189,10 @@ export class ResultScene extends Phaser.Scene {
     lines.push({ text: '', color: '#00aa22' });
     lines.push({ text: `QUESTIONS USED: ${questionsUsed}/${10}`, color: '#00aa22' });
     lines.push({ text: `TIME ELAPSED: ${Math.floor(timeElapsed / 60)}:${String(timeElapsed % 60).padStart(2, '0')}`, color: '#00aa22' });
+    if (txId) {
+      const txShort = String(txId).slice(0, 24) + '...';
+      lines.push({ text: `TX: ${txShort}`, color: '#00cc44' });
+    }
 
     let y = 160;
     lines.forEach((line, i) => {
@@ -231,7 +231,7 @@ export class ResultScene extends Phaser.Scene {
       (leaderboard || []).slice(0, 5).forEach((entry, i) => {
         const addr = entry.shielded_address || 'UNKNOWN';
         const truncAddr = addr.length > 12 ? addr.slice(0, 5) + '..' + addr.slice(-5) : addr;
-        this.add.text(GAME_WIDTH / 2, y + 20 + i * 18, `${i + 1}. ${truncAddr}  ${entry.best_score}`, {
+        this.add.text(GAME_WIDTH / 2, y + 20 + i * 18, `${i + 1}. ${truncAddr}  ${entry.score}`, {
           fontFamily: "'Press Start 2P', monospace",
           fontSize: '6px',
           color: i === 0 ? '#00ff41' : '#00aa22',
