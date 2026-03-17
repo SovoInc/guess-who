@@ -80,6 +80,7 @@ export class MenuScene extends Phaser.Scene {
     // ── Top-right wallet connect button ──
     this._buildWalletButton();
     this._buildNetworkStatus();
+    this._buildMuteButton(20, 20);
 
     // If address is in session but wallet not in memory (e.g. after page refresh), auto-reconnect
     if (getAddress() && !window.__midnightConnectedApi) {
@@ -384,6 +385,55 @@ export class MenuScene extends Phaser.Scene {
     if (!s) { this._netStatusBtn.setColor('#00aa22'); return; }
     const allOk = s.gameServer && s.proofServer && s.node && s.indexer;
     this._netStatusBtn.setColor(allOk ? '#00ff41' : '#ff8800');
+  }
+
+  _buildMuteButton(x, y) {
+    const size = 28;
+    const gfx = this.add.graphics().setDepth(10);
+    const hit = this.add.rectangle(x + size / 2, y + size / 2, size, size, 0, 0)
+      .setDepth(11).setInteractive({ useHandCursor: true });
+
+    const draw = () => {
+      const music = this.registry.get('themeMusic');
+      const muted = !music || !music.isPlaying || music.volume === 0;
+      gfx.clear();
+      gfx.fillStyle(muted ? 0x440000 : 0x003300, 1);
+      gfx.fillRect(x, y, size, size);
+      gfx.lineStyle(1, muted ? 0xff4444 : 0x00ff41, 1);
+      gfx.strokeRect(x, y, size, size);
+      // Speaker body
+      const cx = x + 8, cy = y + size / 2;
+      gfx.fillStyle(muted ? 0xff4444 : 0x00ff41, 1);
+      gfx.fillRect(cx, cy - 4, 4, 8);
+      gfx.fillTriangle(cx, cy - 4, cx + 4, cy - 4, cx + 4, cy - 9);
+      gfx.fillTriangle(cx, cy + 4, cx + 4, cy + 4, cx + 4, cy + 9);
+      // Sound waves (or X if muted)
+      if (!muted) {
+        gfx.lineStyle(1, 0x00ff41, 1);
+        gfx.strokeCircle(cx + 8, cy, 4);
+        gfx.strokeCircle(cx + 8, cy, 7);
+      } else {
+        gfx.lineStyle(2, 0xff4444, 1);
+        gfx.beginPath(); gfx.moveTo(cx + 7, cy - 4); gfx.lineTo(cx + 13, cy + 4); gfx.strokePath();
+        gfx.beginPath(); gfx.moveTo(cx + 13, cy - 4); gfx.lineTo(cx + 7, cy + 4); gfx.strokePath();
+      }
+    };
+
+    draw();
+
+    hit.on('pointerover', () => { gfx.setAlpha(0.8); });
+    hit.on('pointerout',  () => { gfx.setAlpha(1); });
+    hit.on('pointerdown', () => {
+      const music = this.registry.get('themeMusic');
+      if (!music) return;
+      if (music.isPlaying && music.volume > 0) {
+        music.setVolume(0);
+      } else {
+        music.setVolume(0.5);
+        if (!music.isPlaying) music.play();
+      }
+      draw();
+    });
   }
 
   _isDisabled(i) {
