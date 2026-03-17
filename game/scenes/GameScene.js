@@ -1344,9 +1344,9 @@ export class GameScene extends Phaser.Scene {
           this._runChainVerify(answerBool, () => {
             const valDisplay = value.replace(/_/g, ' ').toUpperCase();
             if (answerBool) {
-              this.networkWindow.log(`⛓ SPY HAS ${valDisplay} — ELIMINATE OTHERS`, '#00ff41');
+              this.networkWindow.log(`⛓ YES: CLEAR AGENTS WITHOUT ${valDisplay}`, '#00ff41');
             } else {
-              this.networkWindow.log(`⛓ SPY HAS NO ${valDisplay} — ELIMINATE MATCHES`, '#ff8800');
+              this.networkWindow.log(`⛓ NO: CLEAR AGENTS WITH ${valDisplay}`, '#ff8800');
             }
 
             // Compute which non-eliminated cards this intel says should be X'd out
@@ -1561,11 +1561,13 @@ export class GameScene extends Phaser.Scene {
       loop: true,
       callback: () => {
         hi = (hi + 1) % hints.length;
+        if (!this._declareLoader) return;
         this.tweens.add({
           targets: [hintHead, hintBody],
           alpha: 0,
           duration: 300,
           onComplete: () => {
+            if (!this._declareLoader) return;
             hintHead.setText(hints[hi].head);
             hintBody.setText(hints[hi].body);
             this.tweens.add({ targets: [hintHead, hintBody], alpha: 1, duration: 300 });
@@ -1598,6 +1600,8 @@ export class GameScene extends Phaser.Scene {
       ...data,
       cpuSpy,
       characters: this.characters,
+      playerQuestions: this.state.questions || [],
+      cpuQuestions: this.state.cpuQuestions || [],
     };
     this.cameras.main.fadeOut(500, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
@@ -1652,6 +1656,10 @@ export class GameScene extends Phaser.Scene {
       const correctAnswer = spyVal === qVal ? 'YES' : 'NO';
       const wasLie = playerAnswer !== correctAnswer;
       console.log(`[LIE CHECK] spy=${playerSpy.name} prop=${prop} spyVal=${spyVal} qVal=${qVal} correct=${correctAnswer} player=${playerAnswer} wasLie=${wasLie}`);
+
+      // Track CPU question for end-game log
+      if (!this.state.cpuQuestions) this.state.cpuQuestions = [];
+      this.state.cpuQuestions.push({ category: question.category, value: question.value, answer: playerAnswer, wasLie });
 
       // Log CPU question + player answer to secure channel
       const cpuSentence = formatQuestion(question.category, question.value);
