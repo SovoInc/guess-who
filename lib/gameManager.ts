@@ -103,6 +103,14 @@ function generateBoard(): Character[] {
 // In-memory session store — used when POSTGRES_URL is not set
 const memSessions = new Map<string, { spy_id: number; characters: Character[]; salt: string; expires: number }>();
 
+// Prune expired in-memory sessions every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, s] of memSessions.entries()) {
+    if (s.expires < now) memSessions.delete(id);
+  }
+}, 5 * 60 * 1000).unref();
+
 function hasDb() {
   return !!process.env.POSTGRES_URL;
 }

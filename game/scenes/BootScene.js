@@ -24,6 +24,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('roster', '/assets/roster.png', { frameWidth: 96, frameHeight: 96 });
     this.load.audio('theme', '/assets/theme.ogg');
     this.load.image('unknown', '/assets/unknown.jpg');
+    this.load.image('declare', '/assets/declare.png');
   }
 
   create() {
