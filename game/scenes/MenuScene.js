@@ -5,7 +5,7 @@ import { startSession, getScores, getNetworkStatus, getProofServerMode, setProof
 import { getAddress, connectLace } from '../wallet.js';
 import { SoundSynth } from '../audio/SoundSynth.js';
 
-const MENU_ITEMS = ['START MISSION', 'HIGH SCORES', 'ABOUT'];
+const MENU_ITEMS = ['START MISSION', 'DEMO MODE', 'HIGH SCORES', 'ABOUT'];
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -764,6 +764,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   _isDisabled(i) {
+    // START MISSION (0) requires wallet; DEMO MODE (1) always enabled; HIGH SCORES (2) and ABOUT (3) always enabled
     return i === 0 && !getAddress();
   }
 
@@ -794,8 +795,9 @@ export class MenuScene extends Phaser.Scene {
 
     switch (this.selectedIndex) {
       case 0: this._startMission(); break;
-      case 1: this._showHighScores(); break;
-      case 2: this._showAbout(); break;
+      case 1: this._startDemo(); break;
+      case 2: this._showHighScores(); break;
+      case 3: this._showAbout(); break;
     }
   }
 
@@ -811,6 +813,24 @@ export class MenuScene extends Phaser.Scene {
       this.cameras.main.fadeOut(400, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start('GameScene', { sessionId, walletAddress: addr, characters, contractAddress: contractAddress || null, gameId: gameId || null });
+      });
+    } catch (err) {
+      const msg = err?.message || String(err);
+      this._showMessage(`ERROR: ${msg.slice(0, 50)}`, '#ff4444', () => {
+        this.menuReady = true;
+      });
+    }
+  }
+
+  async _startDemo() {
+    this.menuReady = false;
+    this._showMessage('LOADING DEMO...', '#00ff41');
+
+    try {
+      const { sessionId, characters } = await startSession(true);
+      this.cameras.main.fadeOut(400, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('GameScene', { sessionId, walletAddress: null, characters, contractAddress: null, gameId: null, demoMode: true });
       });
     } catch (err) {
       const msg = err?.message || String(err);

@@ -1,9 +1,10 @@
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-export async function startSession() {
+export async function startSession(demo = false) {
   const res = await fetch(`${BASE}/api/session/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ demo }),
   });
   if (!res.ok) throw new Error('Failed to start session');
   return res.json();
