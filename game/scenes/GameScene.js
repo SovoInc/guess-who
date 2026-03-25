@@ -55,6 +55,7 @@ export class GameScene extends Phaser.Scene {
   init(data) {
     this.sessionId = data.sessionId;
     this.walletAddress = data.walletAddress;
+    this.demoMode = data.demoMode || false;
     this.characters = data.characters || CHARACTERS;
     this.gameContractAddress = data.contractAddress || null;
     this.gameId = data.gameId || null;
@@ -238,7 +239,7 @@ export class GameScene extends Phaser.Scene {
       color: '#39ff14',
     }).setOrigin(1, 0);
 
-    this.add.text(12, 32, `AGENT: ${truncateAddress(this.walletAddress, 6)}`, {
+    this.add.text(12, 32, `AGENT: ${this.demoMode ? 'DEMO' : truncateAddress(this.walletAddress, 6)}`, {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: fs2,
       color: '#00aa22',
@@ -1448,10 +1449,10 @@ export class GameScene extends Phaser.Scene {
 
     this.networkWindow.runProofAnimation(async () => {
       try {
-        // Dev mode: evaluate locally
+        // Dev mode: evaluate locally; demo mode: call server but no wallet/contract = no blockchain submission
         const result = this._devCpuSpyId !== null
           ? { correct: character.id === this._devCpuSpyId, spy: this.characters[this._devCpuSpyId], onChain: null, proof: null }
-          : await declareSpy(this.sessionId, character.id, this.walletAddress, this.gameContractAddress, this.gameId);
+          : await declareSpy(this.sessionId, character.id, this.walletAddress, this.demoMode ? null : this.gameContractAddress, this.demoMode ? null : this.gameId);
         const score = this._calcScore(result.correct);
 
         this._hideDeclareLoader();
@@ -1514,7 +1515,7 @@ export class GameScene extends Phaser.Scene {
           .setDepth(51)
       : null;
 
-    const title = this.add.text(W / 2, H / 2 - 56, 'SUBMITTING ZK PROOF TO CHAIN', {
+    const title = this.add.text(W / 2, H / 2 - 56, this.demoMode ? 'EVALUATING GUESS...' : 'SUBMITTING ZK PROOF TO CHAIN', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: '10px',
       color: '#00ff41',

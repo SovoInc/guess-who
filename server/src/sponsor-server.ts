@@ -128,14 +128,15 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
    * Creates an on-chain game entry in the shared contract with a committed spy.
    * Returns session data + contractAddress + gameId.
    */
-  app.post('/api/session/start', async (_req, res) => {
+  app.post('/api/session/start', async (req, res) => {
     try {
-      let contractAddress: string | null = sharedContractAddress;
+      const { demo } = (req.body || {}) as { demo?: boolean };
+      let contractAddress: string | null = demo ? null : sharedContractAddress;
       let gameId: string | null = null;
       let spyIdOverride: number | undefined;
       let saltOverride: string | undefined;
 
-      if (sharedContractAddress) {
+      if (!demo && sharedContractAddress) {
         // Try to claim a pre-generated game from the pool
         const poolEntry = await claimPoolEntry();
         if (poolEntry) {
@@ -329,6 +330,11 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
         spyName?: string;
       };
 
+      if (shieldedAddress === 'DEMO') {
+        res.json({ ok: true, newAchievements: [] });
+        return;
+      }
+
       await recordGameScore({ session_id: sessionId, shielded_address: shieldedAddress, score, questions_used: questionsUsed, time_elapsed: timeElapsed, correct });
       await recordGameResult(shieldedAddress, correct);
 
@@ -381,6 +387,159 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
     try {
       const all = await getAllPlayerAchievements();
       res.json({ definitions: ACHIEVEMENTS, players: all });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // ── PRC-6 Midnight Platform Integration ──
+
+  const PRC6_CHANNELS = [
+    {
+      id: 'leaderboard',
+      name: 'Leaderboard',
+      description: 'Top scores from correctly identified spies.',
+      scoreUnit: 'Points',
+      sortOrder: 'DESC' as const,
+      type: 'cumulative' as const,
+    },
+    {
+      id: 'transactions',
+      name: 'Games Played',
+      description: 'Total number of games played.',
+      scoreUnit: 'Transactions',
+      sortOrder: 'DESC' as const,
+      type: 'cumulative' as const,
+    },
+    {
+      id: 'verifications',
+      name: 'Spies Caught',
+      description: 'Total ZK-proven correct spy identifications.',
+      scoreUnit: 'Verifications',
+      sortOrder: 'DESC' as const,
+      type: 'cumulative' as const,
+    },
+  ];
+
+  const PRC6_ACHIEVEMENTS = ACHIEVEMENTS.map(a => ({
+    name: a.id,
+    displayName: a.name,
+    description: a.description,
+    isActive: true,
+    ...(a.icon ? { iconURI: a.icon } : {}),
+  }));
+
+  // GET /metrics — app metadata, achievement definitions, channel list
+  app.get('/metrics', async (_req, res) => {
+    res.json({
+      name: 'Proof of Spy',
+      description: 'A ZK-proof deduction game on the Midnight blockchain. Identify the spy using yes/no questions and submit your guess on-chain.',
+      achievements: PRC6_ACHIEVEMENTS,
+      channels: PRC6_CHANNELS,
+    });
+  });
+
+  // GET /metrics/users/:address — user identity + achievements + per-channel stats
+  app.get('/metrics/users/:address', async (req, res) => {
+    try {
+      const { address } = req.params as { address: string };
+      const requestedChannels = ([] as string[]).concat((req.query as any).channel ?? []);
+
+      const stats = await getPlayerStats(address);
+      if (!stats) return res.status(404).json({ error: `Address '${address}' not found.` });
+
+      const playerAchievements = await getPlayerAchievements(address);
+
+      const identity = {
+        address,
+        delegatedFrom: [] as string[],
+      };
+
+      if (requestedChannels.length === 0) {
+        return res.json({ identity, achievements: playerAchievements.map(a => a.id) });
+      }
+
+      // Build per-channel stats — need rank, which requires full leaderboard query
+      const channels: Record<string, any> = {};
+
+      for (const channelId of requestedChannels) {
+        const def = PRC6_CHANNELS.find(c => c.id === channelId);
+        if (!def) continue;
+
+        if (channelId === 'leaderboard') {
+          // Best score for this address, rank among all correct-guess scores
+          const board = await getLeaderboard();
+          const entry = board.find(e => e.shielded_address === address);
+          const score = entry?.score ?? 0;
+          const rank = board.filter(e => e.score > score).length + 1;
+          channels[channelId] = { stats: { score, rank, matchesPlayed: stats.games_played } };
+        } else if (channelId === 'transactions') {
+          const allStats = await getAllPlayerStats();
+          allStats.sort((a, b) => b.games_played - a.games_played);
+          const rank = allStats.findIndex(s => s.shielded_address === address) + 1;
+          channels[channelId] = { stats: { score: stats.games_played, rank: rank > 0 ? rank : 0, matchesPlayed: stats.games_played } };
+        } else if (channelId === 'verifications') {
+          const allStats = await getAllPlayerStats();
+          allStats.sort((a, b) => b.spies_caught - a.spies_caught);
+          const rank = allStats.findIndex(s => s.shielded_address === address) + 1;
+          channels[channelId] = { stats: { score: stats.spies_caught, rank: rank > 0 ? rank : 0, matchesPlayed: stats.games_played } };
+        }
+      }
+
+      return res.json({ identity, achievements: playerAchievements.map(a => a.id), channels });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // GET /metrics/:channel — ranked entries for a channel (must be registered after /metrics/users/:address)
+  app.get('/metrics/:channel', async (req, res) => {
+    try {
+      const { channel } = req.params as { channel: string };
+      const query = req.query as { limit?: string; offset?: string; startDate?: string; endDate?: string; minAchievements?: string };
+      const limit = Math.min(parseInt(query.limit ?? '50', 10) || 50, 1000);
+      const offset = parseInt(query.offset ?? '0', 10) || 0;
+
+      const def = PRC6_CHANNELS.find(c => c.id === channel);
+      if (!def) return res.status(404).json({ error: `Channel '${channel}' not found.` });
+
+      const now = new Date().toISOString();
+      const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+      const startDate = query.startDate ?? oneYearAgo;
+      const endDate = query.endDate ?? now;
+
+      type Entry = { rank: number; address: string; displayName: string | null; score: number };
+      let allEntries: Entry[] = [];
+
+      if (channel === 'leaderboard') {
+        const board = await getLeaderboard();
+        // getLeaderboard already returns top 20 correct scores sorted by score DESC
+        // Re-fetch all for proper pagination and ranking
+        allEntries = board.map((e, i) => ({
+          rank: i + 1,
+          address: e.shielded_address,
+          displayName: null,
+          score: e.score,
+        }));
+      } else if (channel === 'transactions' || channel === 'verifications') {
+        const allStats = await getAllPlayerStats();
+        const getScore = channel === 'transactions'
+          ? (s: { games_played: number }) => s.games_played
+          : (s: { spies_caught: number }) => s.spies_caught;
+        allStats.sort((a, b) => getScore(b) - getScore(a));
+        allEntries = allStats.map((s, i) => ({
+          rank: i + 1,
+          address: s.shielded_address,
+          displayName: null,
+          score: getScore(s),
+        }));
+      }
+
+      const totalPlayers = allEntries.length;
+      const totalScore = allEntries.reduce((sum, e) => sum + e.score, 0);
+      const entries = allEntries.slice(offset, offset + limit);
+
+      return res.json({ channel, startDate, endDate, totalPlayers, totalScore, entries });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
