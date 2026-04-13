@@ -390,6 +390,7 @@ export class GameScene extends Phaser.Scene {
     this.networkWindow = new NetworkWindow(this, netWinY, netWinH, colX, colW);
     this.networkWindow.log('SECURE CHANNEL OPEN', '#00ff41');
     this.networkWindow.log(`SESSION: ${this.sessionId.slice(0, 16)}...`, '#00cc33');
+    this.networkWindow.log('NARROW TO 1 SUSPECT — THEN DECLARE', '#005500');
 
     // 4. Declare button pinned to bottom of column
     const declareH = 40;
@@ -1406,8 +1407,27 @@ export class GameScene extends Phaser.Scene {
 
   // ── Declare ───────────────────────────────────────────────────────────
 
+  _canDeclare() {
+    // All characters must be eliminated except own spy (gold) + one suspect = total - 2 eliminated
+    const total = this.characters.length;
+    const eliminated = this.state.eliminated.size;
+    return eliminated >= total - 2;
+  }
+
   _enterDeclareMode() {
     if (this.state.declaringMode || this.state.gameOver) return;
+    if (!this._canDeclare() && this.state.questionsLeft > 0) {
+      this.networkWindow.log('ELIMINATE ALL SUSPECTS FIRST', '#ff4444');
+      if (this.sound) this.sound.beepLow?.();
+      // Flash declare button red
+      this.declareGfx.clear();
+      this.declareGfx.fillStyle(0x1a0000, 1);
+      this.declareGfx.fillRect(this._declareX, this._declareY, this._declareW, this._declareH);
+      this.declareGfx.lineStyle(2, 0xff4444, 1);
+      this.declareGfx.strokeRect(this._declareX, this._declareY, this._declareW, this._declareH);
+      this.time.delayedCall(800, () => { this._drawDeclareBtn(false); });
+      return;
+    }
     this.state.declaringMode = true;
     this.questionPanel.setDisabled(true);
     this.networkWindow.log('SELECT OPERATIVE TO DECLARE', '#ffaa00');

@@ -30,6 +30,18 @@ export async function declareSpy(sessionId, guessId, shieldedAddress, contractAd
   return res.json(); // { correct, spy, onChain }
 }
 
+export async function checkLocalProofServer() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch('http://localhost:6300', { signal: controller.signal });
+    clearTimeout(timeout);
+    return res.ok || res.status < 500; // any response means it's running
+  } catch {
+    return false;
+  }
+}
+
 export async function getNetworkStatus() {
   const res = await fetch(`${BASE}/api/status`);
   if (!res.ok) throw new Error('Failed to get status');

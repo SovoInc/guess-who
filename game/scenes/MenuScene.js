@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, GAME_WIDTH, GAME_HEIGHT, ALL_CHARACTERS, ROSTER_FRAME } from '../constants.js';
 import { applyCRTOverlay, addFlickerTween } from '../utils/crt.js';
-import { startSession, getScores, getNetworkStatus, getProofServerMode, setProofServerMode } from '../api.js';
+import { startSession, getScores, getNetworkStatus, getProofServerMode, setProofServerMode, checkLocalProofServer } from '../api.js';
 import { getAddress, connectLace } from '../wallet.js';
 import { SoundSynth } from '../audio/SoundSynth.js';
 
@@ -491,10 +491,21 @@ export class MenuScene extends Phaser.Scene {
     this._proofServerMode = this._proofServerMode ?? 'remote'; // default before fetch
     try {
       const { mode } = await getProofServerMode();
-      this._proofServerMode = mode;
+      // If server thinks we're on local but user doesn't have it running, switch to remote
+      if (mode === 'local') {
+        const localRunning = await checkLocalProofServer();
+        if (!localRunning) {
+          await setProofServerMode('remote').catch(() => {});
+          this._proofServerMode = 'remote';
+        } else {
+          this._proofServerMode = 'local';
+        }
+      } else {
+        this._proofServerMode = 'remote';
+      }
       if (this._netDropdownOpen) this._renderDropdown();
     } catch {
-      // keep existing value
+      this._proofServerMode = 'remote';
     }
   }
 
@@ -624,6 +635,13 @@ export class MenuScene extends Phaser.Scene {
     localHit.on('pointerout',  () => { drawLocal(false); });
     localHit.on('pointerdown', async () => {
       if (isLocal) return;
+      const localRunning = await checkLocalProofServer();
+      if (!localRunning) {
+        // Flash the button red briefly to indicate unavailable
+        localText.setColor('#ff4444');
+        this.time.delayedCall(800, () => { if (localText.active) localText.setColor('#006600'); });
+        return;
+      }
       await setProofServerMode('local').catch(() => {});
       this._proofServerMode = 'local';
       this._renderDropdown();
