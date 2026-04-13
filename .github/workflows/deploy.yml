@@ -15,12 +15,13 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Build frontend
+      - name: Build contract and frontend
         env:
           VITE_CONTRACT_ADDRESS: ${{ secrets.VITE_CONTRACT_ADDRESS }}
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: |
           npm ci
+          npm run compact:guesswho --workspace=contract
           npm run build
 
       - name: Deploy to EC2
