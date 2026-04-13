@@ -73,8 +73,8 @@ jobs:
           scp -i /tmp/deploy_key -o StrictHostKeyChecking=no \
             package.json ec2-user@${EC2_HOST}:/opt/proof-of-spy/package.json
 
-          # Install deps from workspace root + restart
-          $SSH 'cd /opt/proof-of-spy && npm install && (pm2 restart proof-of-spy --update-env || pm2 start server/ecosystem.config.cjs) && pm2 save'
+          # Install deps, build contract dist, restart
+          $SSH 'cd /opt/proof-of-spy && npm install && npm run build --workspace=contract && (pm2 restart proof-of-spy --update-env || pm2 start server/ecosystem.config.cjs) && pm2 save'
 
           # Ensure proof server is running
           $SSH 'sudo systemctl is-active proof-server || sudo systemctl start proof-server'
