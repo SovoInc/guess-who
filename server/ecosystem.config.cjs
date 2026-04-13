@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name: 'proof-of-spy',
-    script: 'src/preprod.ts',
+    script: 'src/mainnet.ts',
     interpreter: 'node',
     interpreter_args: '--experimental-specifier-resolution=node --import tsx/esm',
     cwd: '/opt/proof-of-spy/server',
