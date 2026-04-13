@@ -31,6 +31,12 @@ export default defineConfig({
   },
   build: {
     commonjsOptions: { transformMixedEsModules: true },
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('index.html', import.meta.url)),
+        deploy: fileURLToPath(new URL('deploy.html', import.meta.url)),
+      },
+    },
   },
   server: {
     fs: { allow: ['..'] },

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deploy Guess Who Contract</title>
+    <style>
+      body { font-family: monospace; background: #0a0a0a; color: #e0e0e0; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+      .card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 40px; max-width: 600px; width: 100%; }
+      h1 { margin: 0 0 8px; font-size: 1.4rem; color: #fff; }
+      p { margin: 0 0 24px; color: #888; font-size: 0.85rem; }
+      button { background: #4a90e2; color: #fff; border: none; border-radius: 4px; padding: 12px 24px; font-size: 1rem; font-family: monospace; cursor: pointer; width: 100%; }
+      button:disabled { background: #333; color: #666; cursor: not-allowed; }
+      #log { margin-top: 24px; background: #111; border: 1px solid #222; border-radius: 4px; padding: 16px; font-size: 0.8rem; min-height: 80px; white-space: pre-wrap; color: #aaa; }
+      .address { color: #4a90e2; font-weight: bold; word-break: break-all; }
+      .error { color: #e24a4a; }
+      .success { color: #4ae24a; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Deploy Guess Who Contract</h1>
+      <p>Connects to your Midnight wallet (1AM) and deploys the contract. Fees are sponsored by the wallet's proof station.</p>
+      <button id="btn">Connect Wallet &amp; Deploy</button>
+      <div id="log">Ready.</div>
+    </div>
+    <script type="module" src="/src/deploy.ts"></script>
+  </body>
+</html>

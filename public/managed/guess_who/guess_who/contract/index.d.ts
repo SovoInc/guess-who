@@ -10,6 +10,15 @@ export type ImpureCircuits<PS> = {
   submit_guess(context: __compactRuntime.CircuitContext<PS>,
                game_id_0: bigint,
                guess_id_0: bigint): __compactRuntime.CircuitResults<PS, boolean>;
+  delete_game(context: __compactRuntime.CircuitContext<PS>, game_id_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+}
+
+export type ProvableCircuits<PS> = {
+  create_game(context: __compactRuntime.CircuitContext<PS>): __compactRuntime.CircuitResults<PS, bigint>;
+  submit_guess(context: __compactRuntime.CircuitContext<PS>,
+               game_id_0: bigint,
+               guess_id_0: bigint): __compactRuntime.CircuitResults<PS, boolean>;
+  delete_game(context: __compactRuntime.CircuitContext<PS>, game_id_0: bigint): __compactRuntime.CircuitResults<PS, []>;
 }
 
 export type PureCircuits = {
@@ -20,6 +29,7 @@ export type Circuits<PS> = {
   submit_guess(context: __compactRuntime.CircuitContext<PS>,
                game_id_0: bigint,
                guess_id_0: bigint): __compactRuntime.CircuitResults<PS, boolean>;
+  delete_game(context: __compactRuntime.CircuitContext<PS>, game_id_0: bigint): __compactRuntime.CircuitResults<PS, []>;
 }
 
 export type Ledger = {
@@ -41,6 +51,7 @@ export declare class Contract<PS = any, W extends Witnesses<PS> = Witnesses<PS>>
   witnesses: W;
   circuits: Circuits<PS>;
   impureCircuits: ImpureCircuits<PS>;
+  provableCircuits: ProvableCircuits<PS>;
   constructor(witnesses: W);
   initialState(context: __compactRuntime.ConstructorContext<PS>): __compactRuntime.ConstructorResult<PS>;
 }

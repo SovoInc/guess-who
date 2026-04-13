@@ -7,3 +7,4 @@
 *.env
 !*.env.example
 public/managed/counter
+server/wallet-cache/

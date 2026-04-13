@@ -35,7 +35,7 @@ export async function connectLace(onStatus = () => {}) {
   if (!walletEntry) throw new Error('Lace wallet (io.lace.wallet) not found.');
 
   onStatus('CONNECTING TO LACE...');
-  const connectedApi = await walletEntry.connect('preprod');
+  const connectedApi = await walletEntry.connect('mainnet');
 
   onStatus('FETCHING SHIELDED ADDRESS...');
   const addresses = await connectedApi.getShieldedAddresses();

@@ -63,3 +63,14 @@ export class PreprodConfig implements Config {
     setNetworkId('preprod');
   }
 }
+
+export class MainnetConfig implements Config {
+  logDir = path.resolve(currentDir, '..', 'logs', 'mainnet', `${new Date().toISOString()}.log`);
+  indexer = 'https://indexer.mainnet.midnight.network/api/v4/graphql';
+  indexerWS = 'wss://indexer.mainnet.midnight.network/api/v4/graphql/ws';
+  node = 'https://rpc.mainnet.midnight.network';
+  proofServer = process.env.PROOF_SERVER_URL ?? 'http://localhost:6300';
+  constructor() {
+    setNetworkId('mainnet');
+  }
+}

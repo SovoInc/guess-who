@@ -13,7 +13,10 @@
     "preview": "node --experimental-specifier-resolution=node --import tsx/esm src/preview.ts",
     "preview-ps": "docker compose -f proof-server.yml pull && node --experimental-specifier-resolution=node --import tsx/esm src/preview-start-proof-server.ts",
     "preprod": "node --experimental-specifier-resolution=node --import tsx/esm src/preprod.ts",
-    "preprod-ps": "docker compose -f proof-server.yml pull && node --experimental-specifier-resolution=node --import tsx/esm src/preprod-start-proof-server.ts"
+    "preprod-ps": "docker compose -f proof-server.yml pull && node --experimental-specifier-resolution=node --import tsx/esm src/preprod-start-proof-server.ts",
+    "mainnet": "node --experimental-specifier-resolution=node --import tsx/esm src/mainnet.ts",
+    "mainnet-ps": "docker compose -f proof-server.yml pull && node --experimental-specifier-resolution=node --import tsx/esm src/mainnet-start-proof-server.ts",
+    "deploy:mainnet": "node --experimental-specifier-resolution=node --import tsx/esm src/deploy-mainnet.ts"
   },
   "dependencies": {
     "@midnight-ntwrk/counter-contract": "*",

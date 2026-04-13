@@ -42,7 +42,7 @@ export default function WalletConnect() {
 
     setWalletState('connecting');
     try {
-      const connectedApi = await walletEntry.connect('undeployed');
+      const connectedApi = await walletEntry.connect('mainnet');
       const addresses = await connectedApi.getShieldedAddresses();
       const shieldedAddress = (addresses as any)?.shieldedAddress || (addresses as any)?.[0] || 'UNKNOWN_AGENT';
 

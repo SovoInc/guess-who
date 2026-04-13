@@ -1,5 +1,5 @@
 import * as __compactRuntime from '@midnight-ntwrk/compact-runtime';
-__compactRuntime.checkRuntimeVersion('0.14.0');
+__compactRuntime.checkRuntimeVersion('0.15.0');
 
 const _descriptor_0 = new __compactRuntime.CompactTypeUnsignedInteger(18446744073709551615n, 8);
 
@@ -166,11 +166,53 @@ export class Contract {
                                               guess_id_0);
         partialProofData.output = { value: _descriptor_2.toValue(result_0), alignment: _descriptor_2.alignment() };
         return { result: result_0, context: context, proofData: partialProofData, gasCost: context.gasCost };
+      },
+      delete_game: (...args_1) => {
+        if (args_1.length !== 2) {
+          throw new __compactRuntime.CompactError(`delete_game: expected 2 arguments (as invoked from Typescript), received ${args_1.length}`);
+        }
+        const contextOrig_0 = args_1[0];
+        const game_id_0 = args_1[1];
+        if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
+          __compactRuntime.typeError('delete_game',
+                                     'argument 1 (as invoked from Typescript)',
+                                     'guess_who.compact line 80 char 1',
+                                     'CircuitContext',
+                                     contextOrig_0)
+        }
+        if (!(typeof(game_id_0) === 'bigint' && game_id_0 >= 0n && game_id_0 <= 18446744073709551615n)) {
+          __compactRuntime.typeError('delete_game',
+                                     'argument 1 (argument 2 as invoked from Typescript)',
+                                     'guess_who.compact line 80 char 1',
+                                     'Uint<0..18446744073709551616>',
+                                     game_id_0)
+        }
+        const context = { ...contextOrig_0, gasCost: __compactRuntime.emptyRunningCost() };
+        const partialProofData = {
+          input: {
+            value: _descriptor_0.toValue(game_id_0),
+            alignment: _descriptor_0.alignment()
+          },
+          output: undefined,
+          publicTranscript: [],
+          privateTranscriptOutputs: []
+        };
+        const result_0 = this._delete_game_0(context,
+                                             partialProofData,
+                                             game_id_0);
+        partialProofData.output = { value: [], alignment: [] };
+        return { result: result_0, context: context, proofData: partialProofData, gasCost: context.gasCost };
       }
     };
     this.impureCircuits = {
       create_game: this.circuits.create_game,
-      submit_guess: this.circuits.submit_guess
+      submit_guess: this.circuits.submit_guess,
+      delete_game: this.circuits.delete_game
+    };
+    this.provableCircuits = {
+      create_game: this.circuits.create_game,
+      submit_guess: this.circuits.submit_guess,
+      delete_game: this.circuits.delete_game
     };
   }
   initialState(...args_0) {
@@ -197,6 +239,7 @@ export class Contract {
     state_0.data = new __compactRuntime.ChargedState(stateValue_0);
     state_0.setOperation('create_game', new __compactRuntime.ContractOperation());
     state_0.setOperation('submit_guess', new __compactRuntime.ContractOperation());
+    state_0.setOperation('delete_game', new __compactRuntime.ContractOperation());
     const context = __compactRuntime.createCircuitContext(__compactRuntime.dummyContractAddress(), constructorContext_0.initialZswapLocalState.coinPublicKey, state_0.data, constructorContext_0.initialPrivateState);
     const partialProofData = {
       input: { value: [], alignment: [] },
@@ -373,12 +416,60 @@ export class Contract {
     }
     return is_correct_0;
   }
+  _delete_game_0(context, partialProofData, game_id_0) {
+    const pub_game_id_0 = game_id_0;
+    const game_0 = _descriptor_3.fromValue(__compactRuntime.queryLedgerState(context,
+                                                                             partialProofData,
+                                                                             [
+                                                                              { dup: { n: 0 } },
+                                                                              { idx: { cached: false,
+                                                                                       pushPath: false,
+                                                                                       path: [
+                                                                                              { tag: 'value',
+                                                                                                value: { value: _descriptor_9.toValue(1n),
+                                                                                                         alignment: _descriptor_9.alignment() } }] } },
+                                                                              { idx: { cached: false,
+                                                                                       pushPath: false,
+                                                                                       path: [
+                                                                                              { tag: 'value',
+                                                                                                value: { value: _descriptor_0.toValue(pub_game_id_0),
+                                                                                                         alignment: _descriptor_0.alignment() } }] } },
+                                                                              { popeq: { cached: false,
+                                                                                         result: undefined } }]).value);
+    __compactRuntime.assert(!game_0.active,
+                            'Game must be inactive before deletion');
+    const secret_0 = this._culprit_id_0(context, partialProofData);
+    const secret_salt_0 = this._salt_0(context, partialProofData);
+    const computed_0 = this._persistentHash_0({ culprit: secret_0,
+                                                salt: secret_salt_0 });
+    __compactRuntime.assert(this._equal_2(computed_0, game_0.commitment),
+                            'Commitment mismatch');
+    __compactRuntime.queryLedgerState(context,
+                                      partialProofData,
+                                      [
+                                       { idx: { cached: false,
+                                                pushPath: true,
+                                                path: [
+                                                       { tag: 'value',
+                                                         value: { value: _descriptor_9.toValue(1n),
+                                                                  alignment: _descriptor_9.alignment() } }] } },
+                                       { push: { storage: false,
+                                                 value: __compactRuntime.StateValue.newCell({ value: _descriptor_0.toValue(pub_game_id_0),
+                                                                                              alignment: _descriptor_0.alignment() }).encode() } },
+                                       { rem: { cached: false } },
+                                       { ins: { cached: true, n: 1 } }]);
+    return [];
+  }
   _equal_0(x0, y0) {
     if (!x0.every((x, i) => y0[i] === x)) { return false; }
     return true;
   }
   _equal_1(x0, y0) {
     if (x0 !== y0) { return false; }
+    return true;
+  }
+  _equal_2(x0, y0) {
+    if (!x0.every((x, i) => y0[i] === x)) { return false; }
     return true;
   }
 }

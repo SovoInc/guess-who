@@ -1,8 +1,12 @@
 {
+  "compiler-version": "0.30.0",
+  "language-version": "0.22.0",
+  "runtime-version": "0.15.0",
   "circuits": [
     {
       "name": "create_game",
       "pure": false,
+      "proof": true,
       "arguments": [
       ],
       "result-type": {
@@ -13,6 +17,7 @@
     {
       "name": "submit_guess",
       "pure": false,
+      "proof": true,
       "arguments": [
         {
           "name": "game_id",
@@ -31,6 +36,25 @@
       ],
       "result-type": {
         "type-name": "Boolean"
+      }
+    },
+    {
+      "name": "delete_game",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "game_id",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 18446744073709551615
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
       }
     }
   ],

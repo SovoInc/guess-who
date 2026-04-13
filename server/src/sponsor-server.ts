@@ -4,7 +4,7 @@
 
 import express from 'express';
 import cors from 'cors';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { fromHex } from '@midnight-ntwrk/midnight-js-utils';
 import type { WalletContext } from './api.js';
 import { signTransactionIntents, configureProviders, configureGuessWhoProviders, deployGuessWho, createOnChainGame, submitGuessOnChain, getDustBalance } from './api.js';
@@ -12,7 +12,7 @@ import { type Logger } from 'pino';
 import { createSession, answerQuestion, evaluateGuess } from '../../lib/gameManager.js';
 import { recordGameScore, getLeaderboard, recordGameResult, getPlayerStats, getAllPlayerStats } from '../../lib/scores.js';
 import { awardAchievement, achievementForSpy, getPlayerAchievements, getAllPlayerAchievements, ACHIEVEMENTS } from '../../lib/achievements.js';
-import { claimPoolEntry } from '../../lib/gamePool.js';
+import { claimPoolEntry, getPoolSize } from '../../lib/gamePool.js';
 import { runPoolRefill } from './poolWorker.js';
 import { enqueueOnChain } from './onChainQueue.js';
 
@@ -65,6 +65,9 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
 `);
   }
 
+  // Log current pool size
+  getPoolSize().then(size => logger.info(`Game pool: ${size} pre-created games ready`)).catch(() => {});
+
   // Start background pool refill (fire and forget)
   runPoolRefill(guessWhoProvidersGlobal, sharedContractAddress!, logger, walletCtxGlobal!).catch(err => {
     logger.error({ err }, 'Pool refill loop crashed');
@@ -73,6 +76,27 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
   const app = express();
   app.use(cors());
   app.use(express.json());
+
+  // ── Deploy submission (wallet-balanced tx, submit via private RPC) ──
+
+  app.post('/deploy-submit', async (req, res) => {
+    try {
+      const { tx: txHex } = req.body as { tx: string };
+      const tx = ledger.Transaction.deserialize<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>(
+        'signature',
+        'proof',
+        'binding',
+        fromHex(txHex),
+      );
+      const txId = await ctx.wallet.submitTransaction(tx as any);
+      logger.info(`deploy-submit: txId=${txId}`);
+      res.json({ txId });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(`deploy-submit error: ${message}`);
+      res.status(500).json({ error: message });
+    }
+  });
 
   // ── Transaction sponsorship ──
 

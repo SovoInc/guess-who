@@ -1,0 +1,43 @@
+ ---
+  Deployment Rubric Assessment
+
+  Privacy-at-Risk: Score 1
+
+  The ZK circuit only ever discloses a Boolean (correct/incorrect). The culprit ID and salt are witness-only — never revealed on-chain. The commitment is a one-way
+  hash. The only "sensitive" data is the game outcome, which is a public deduction game result with no real-world identity linkage.
+
+  Rationale: Data is intentionally public or devoid of real-world harm. Game IDs, guess IDs, and win/loss results are the full on-chain footprint.
+
+  ---
+  Value-at-Risk: Score 1
+
+  The contract holds zero funds. No token transfers, no escrow, no vault. The only cost to users is transaction fees (DUST), which are sponsored server-side. An
+  exploit could corrupt game state (fake commitments, invalid active flags) but cannot drain any user principal.
+
+  Rationale: No funds locked in contract at any time.
+
+  ---
+  State-Space-at-Risk: Score 1 (revised from 2)                                                                                                                       
+                                                                                                                                                                      
+  The contract now has a delete_game circuit that:                                                                                                                    
+  - Requires knowledge of the original culprit_id + salt (ZK-gated — only the sponsor server can call it)                                                             
+  - Only permits deletion of inactive games (completed or abandoned)                                                                                                  
+  - Calls games.remove() to actually reclaim ledger storage         
+                                                                                                                                                                      
+  This means the sponsor server can prune games post-completion, giving the map a natural ceiling equal to the number of currently active games rather than all games
+  ever played. State is bounded per-session lifecycle.                                                                                                                                                                           
+
+  ---
+  Summary Table
+
+  ┌─────────────────────┬───────┬─────────────────────────────────────────────────────────────┐
+  │      Category       │ Score │                          Rationale                          │
+  ├─────────────────────┼───────┼─────────────────────────────────────────────────────────────┤
+  │ Privacy-at-risk     │ 1     │ Only Boolean result on-chain; culprit/salt never disclosed  │
+  ├─────────────────────┼───────┼─────────────────────────────────────────────────────────────┤
+  │ Value-at-risk       │ 1     │ Zero funds in contract; DUST fees are sponsor-side only     │
+  ├─────────────────────┼───────┼─────────────────────────────────────────────────────────────┤
+  │ State-space-at-risk │ 1     │ Completed games can be pruned by sponsor server; active     |
+  |                     │       │ games bounded by concurrent sessions; no free spam vector   |
+  └─────────────────────┴───────┴─────────────────────────────────────────────────────────────┘
+

@@ -72,3 +72,21 @@ export circuit submit_guess(game_id: Uint<64>, guess_id: Uint<64>): Boolean {
 
   return is_correct;
 }
+
+// Remove a completed game from the ledger to reclaim storage.
+// The ZK proof verifies the caller knows the original culprit_id + salt
+// (i.e. only the game creator / sponsor server can prune it).
+// Only inactive games can be deleted.
+export circuit delete_game(game_id: Uint<64>): [] {
+  const pub_game_id = disclose(game_id);
+  const game = games.lookup(pub_game_id);
+  assert (!game.active, "Game must be inactive before deletion");
+
+  const secret      = culprit_id();
+  const secret_salt = salt();
+
+  const computed: Bytes<32> = persistentHash<GameSecret>(GameSecret { culprit: secret, salt: secret_salt });
+  assert (computed == game.commitment, "Commitment mismatch");
+
+  games.remove(pub_game_id);
+}
