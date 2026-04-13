@@ -1513,9 +1513,9 @@ export class GameScene extends Phaser.Scene {
         });
       } catch (e) {
         this._hideDeclareLoader();
-        this.networkWindow.log('NETWORK ERROR', '#ff4444');
-        this.state.gameOver = false;
-        this.cpu.done = false;
+        this.networkWindow.log('NETWORK ERROR — TX MAY STILL PROCESS', '#ff4444');
+        this.networkWindow.log('CHECK BLOCKCHAIN FOR RESULT', '#ff8800');
+        // Keep gameOver = true — don't let player retry the same guess
       }
     }, this.sound);
   }

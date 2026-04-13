@@ -21,13 +21,20 @@ export async function askQuestion(sessionId, category, value) {
 }
 
 export async function declareSpy(sessionId, guessId, shieldedAddress, contractAddress = null, gameId = null) {
-  const res = await fetch(`${BASE}/api/declare`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, guessId, shieldedAddress, contractAddress, gameId }),
-  });
-  if (!res.ok) throw new Error('Failed to declare spy');
-  return res.json(); // { correct, spy, onChain }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120_000); // 2 min
+  try {
+    const res = await fetch(`${BASE}/api/declare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, guessId, shieldedAddress, contractAddress, gameId }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error('Failed to declare spy');
+    return res.json(); // { correct, spy, onChain }
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function checkLocalProofServer() {

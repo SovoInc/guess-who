@@ -3,6 +3,7 @@ import { type Logger } from 'pino';
 import { createOnChainGame, getDustBalance } from './api.js';
 import { addToPool, getPoolSize } from '../../lib/gamePool.js';
 import { enqueuePoolRefill } from './onChainQueue.js';
+import { isGameSessionActive } from './sponsor-server.js';
 
 const TARGET_SIZE = parseInt(process.env.POOL_TARGET_SIZE ?? '10', 10);
 const RETRY_DELAY_MS = 5_000;
@@ -23,6 +24,12 @@ export async function runPoolRefill(
         if (dust.available === 0n && dust.pendingCoins === 0) {
           log.warn('Dust balance is zero — transactions will fail until dust is generated');
         }
+      }
+
+      // Don't refill while a player is mid-game — keep the dust coin free for their declare
+      if (isGameSessionActive()) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        continue;
       }
 
       let size = await getPoolSize();

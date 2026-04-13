@@ -23,6 +23,10 @@ let guessWhoProvidersGlobal: any = null;
 let configGlobal: import('./config.js').Config | null = null;
 let sharedContractAddress: string | null = null;
 
+// Pause pool refill while a player has an active on-chain game session
+let activeGameSessions = 0;
+export function isGameSessionActive() { return activeGameSessions > 0; }
+
 // In-memory map from sessionId -> on-chain game_id (bigint) + creation time for TTL cleanup
 const sessionGameIds = new Map<string, { gameId: bigint; createdAt: number }>();
 
@@ -203,6 +207,7 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
 
       if (gameId) {
         sessionGameIds.set(result.sessionId, { gameId: BigInt(gameId), createdAt: Date.now() });
+        activeGameSessions++;
       }
 
       res.json({
@@ -262,7 +267,10 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
         }
       }
 
-      sessionGameIds.delete(sessionId);
+      if (sessionGameIds.has(sessionId)) {
+        sessionGameIds.delete(sessionId);
+        activeGameSessions = Math.max(0, activeGameSessions - 1);
+      }
 
       res.json({
         correct: result.correct,
