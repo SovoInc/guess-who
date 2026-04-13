@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+import { createHash } from 'crypto';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { unshieldedToken } from '@midnight-ntwrk/ledger-v8';
 import { deployContract, findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
@@ -469,7 +470,7 @@ export const buildWalletAndWaitForFunds = async (config: Config, seed: string): 
       const dustSecretKey = ledger.DustSecretKey.fromSeed(keys[Roles.Dust]);
       const unshieldedKeystore = createKeystore(keys[Roles.NightExternal], getNetworkId());
 
-      const cacheKey = `${getNetworkId()}-${seed.trim().split(' ').slice(0, 3).join('-')}`;
+      const cacheKey = `${getNetworkId()}-${createHash('sha256').update(seed.trim()).digest('hex').slice(0, 12)}`;
       const cache = loadWalletCache(cacheKey);
 
       const walletConfig = {
