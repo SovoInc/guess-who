@@ -308,11 +308,13 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
   // "local"  = proof server running on the connecting client's machine (dev only)
   const SERVER_PROOF_URL = config.proofServer; // capture the server's own proof server URL at startup
   const CLIENT_PROOF_URL = 'http://localhost:6300'; // client's local machine
+  // Start in remote mode — client must explicitly switch to local
+  // This avoids the ambiguity where server's own localhost:6300 looks identical to client's
+  let _proofMode: 'local' | 'remote' = 'remote';
 
   app.get('/api/proof-server', (_req, res) => {
-    const url = config.proofServer;
-    const mode = url === CLIENT_PROOF_URL ? 'local' : 'remote';
-    res.json({ url, mode });
+    const url = _proofMode === 'remote' ? SERVER_PROOF_URL : CLIENT_PROOF_URL;
+    res.json({ url, mode: _proofMode });
   });
 
   app.post('/api/proof-server', (req, res) => {
@@ -321,6 +323,7 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
       res.status(400).json({ error: 'mode must be local or remote' });
       return;
     }
+    _proofMode = mode;
     (config as any).proofServer = mode === 'remote' ? SERVER_PROOF_URL : CLIENT_PROOF_URL;
     logger.info(`Proof server switched to ${mode}: ${config.proofServer}`);
     res.json({ url: config.proofServer, mode });
