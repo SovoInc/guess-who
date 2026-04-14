@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { COLORS, GAME_WIDTH, GAME_HEIGHT, ALL_CHARACTERS, ROSTER_FRAME } from '../constants.js';
 import { applyCRTOverlay, addFlickerTween } from '../utils/crt.js';
 import { startSession, getScores, getNetworkStatus, getProofServerMode, setProofServerMode, checkLocalProofServer } from '../api.js';
-import { getAddress, connectLace } from '../wallet.js';
+import { getAddress, connectLace, connect1AM, getLastWalletKey } from '../wallet.js';
 import { SoundSynth } from '../audio/SoundSynth.js';
 
 const MENU_ITEMS = ['START MISSION', 'DEMO MODE', 'HIGH SCORES', 'ABOUT'];
@@ -84,9 +84,15 @@ export class MenuScene extends Phaser.Scene {
     this._buildNetworkStatus();
     this._buildMuteButton(20, 20);
 
-    // If address is in session but wallet not in memory (e.g. after page refresh), auto-reconnect
+    // If address is in session but wallet not in memory (e.g. after page refresh), auto-reconnect silently
     if (getAddress() && !window.__midnightConnectedApi) {
-      this._connectWallet();
+      const lastKey = getLastWalletKey();
+      if (lastKey) {
+        const connectFn = lastKey === '1am' ? connect1AM : connectLace;
+        this._doConnect(connectFn);
+      } else {
+        this._connectWallet();
+      }
     }
 
     // Menu items
@@ -858,7 +864,57 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
-  async _connectWallet() {
+  _connectWallet() {
+    this._connecting = false;
+    this._showWalletPicker();
+  }
+
+  _showWalletPicker() {
+    this._connecting = false;
+    this._closeWalletPickerDom();
+
+    const el = document.createElement('div');
+    el.id = 'wallet-picker-overlay';
+    Object.assign(el.style, {
+      position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.85)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: '9999',
+    });
+
+    el.innerHTML = `
+      <div style="background:#0a0a0a;border:2px solid #00ff41;padding:2rem 2.5rem;min-width:300px;text-align:center;box-shadow:0 0 40px #00ff4133;font-family:'Courier New',monospace;">
+        <div style="color:#00ff41;font-size:16px;font-weight:bold;letter-spacing:4px;margin-bottom:1.5rem;">SELECT WALLET</div>
+        <button id="wp-lace" style="display:block;width:100%;margin-bottom:0.75rem;padding:0.75rem;background:#001a00;border:1px solid #00ff41;color:#00ff41;font-family:'Courier New',monospace;font-size:14px;font-weight:bold;letter-spacing:2px;cursor:pointer;">LACE MIDNIGHT</button>
+        <button id="wp-1am" style="display:block;width:100%;margin-bottom:1.25rem;padding:0.75rem;background:#001a00;border:1px solid #00ff41;color:#00ff41;font-family:'Courier New',monospace;font-size:14px;font-weight:bold;letter-spacing:2px;cursor:pointer;">1AM WALLET</button>
+        <div id="wp-cancel" style="color:#446644;font-size:11px;letter-spacing:2px;cursor:pointer;">CANCEL</div>
+      </div>
+    `;
+
+    const close = () => this._closeWalletPickerDom();
+
+    el.addEventListener('click', (e) => { if (e.target === el) close(); });
+    el.querySelector('#wp-lace').addEventListener('click', () => { close(); this._doConnect(connectLace); });
+    el.querySelector('#wp-1am').addEventListener('click', () => { close(); this._doConnect(connect1AM); });
+    el.querySelector('#wp-cancel').addEventListener('click', close);
+
+    // Hover styles
+    ['wp-lace', 'wp-1am'].forEach(id => {
+      const btn = el.querySelector(`#${id}`);
+      btn.addEventListener('mouseenter', () => { btn.style.background = '#003300'; btn.style.color = '#ffffff'; });
+      btn.addEventListener('mouseleave', () => { btn.style.background = '#001a00'; btn.style.color = '#00ff41'; });
+    });
+
+    document.body.appendChild(el);
+    this._walletPickerEl = el;
+  }
+
+  _closeWalletPickerDom() {
+    if (this._walletPickerEl) {
+      this._walletPickerEl.remove();
+      this._walletPickerEl = null;
+    }
+  }
+
+  async _doConnect(connectFn) {
     if (this._connecting) return;
     this._connecting = true;
     this.menuReady = false;
@@ -872,7 +928,7 @@ export class MenuScene extends Phaser.Scene {
     };
 
     try {
-      await connectLace(setStatus);
+      await connectFn(setStatus);
 
       // Rebuild top-right button showing address
       this._buildWalletButton();

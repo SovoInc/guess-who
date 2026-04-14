@@ -9,7 +9,8 @@ const SESSION_KEY = 'midnight_shielded_address';
 // Global store so GameScene can access the joined contract via window.__midnightContract
 let _connectedApi: ConnectedAPI | null = null;
 
-type WalletState = 'idle' | 'detecting' | 'connecting' | 'contract' | 'joining' | 'connected' | 'error' | 'not_found';
+type WalletState = 'idle' | 'picking' | 'detecting' | 'connecting' | 'contract' | 'joining' | 'connected' | 'error' | 'not_found';
+type WalletChoice = 'lace' | '1am';
 
 export default function WalletConnect() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function WalletConnect() {
     }
   }, []);
 
-  async function handleConnect() {
+  async function handleConnect(choice: WalletChoice) {
     setWalletState('detecting');
     setErrorMsg('');
     await new Promise(r => setTimeout(r, 300));
@@ -34,9 +35,9 @@ export default function WalletConnect() {
     const midnight = (window as any).midnight;
     if (!midnight) { setWalletState('not_found'); return; }
 
-    const walletEntry = Object.values(midnight).find(
-      (e: any) => e?.rdns === 'io.lace.wallet'
-    ) as { connect: (name: string) => Promise<ConnectedAPI> } | undefined;
+    // Lace uses key 'lace', 1AM uses key '1am' in window.midnight
+    const walletKey = choice === 'lace' ? 'lace' : '1am';
+    const walletEntry = midnight[walletKey] as { connect: (name: string) => Promise<ConnectedAPI> } | undefined;
 
     if (!walletEntry) { setWalletState('not_found'); return; }
 
@@ -100,11 +101,38 @@ export default function WalletConnect() {
     ...btn, border: '2px solid #00ff41', color: '#00ff41', boxShadow: '0 0 8px #00ff4133',
   };
 
+  const overlay: React.CSSProperties = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+  };
+  const modal: React.CSSProperties = {
+    background: '#050505', border: '2px solid #00ff41', padding: '2rem',
+    width: '320px', boxShadow: '0 0 40px #00ff4122',
+    fontFamily: "var(--font-pixel), 'Courier New', monospace",
+  };
+
   return (
     <div style={{ width: '100%' }}>
+      {walletState === 'picking' && (
+        <div style={overlay} onClick={() => setWalletState('idle')}>
+          <div style={modal} onClick={e => e.stopPropagation()}>
+            <p style={{ fontSize: '0.5rem', color: '#00ff41', marginBottom: '1.5rem', letterSpacing: '0.1em' }}>SELECT WALLET</p>
+            <button style={{ ...btnActive, marginBottom: '0.75rem' }} onClick={() => handleConnect('lace')}>
+              LACE MIDNIGHT
+            </button>
+            <button style={{ ...btnActive, marginBottom: '1.5rem' }} onClick={() => handleConnect('1am')}>
+              1AM WALLET
+            </button>
+            <button style={{ ...btn, fontSize: '0.4rem', color: '#002200', borderColor: '#001100', marginBottom: 0 }} onClick={() => setWalletState('idle')}>
+              CANCEL
+            </button>
+          </div>
+        </div>
+      )}
+
       {walletState === 'idle' && (
         <div>
-          <button style={btnActive} onClick={handleConnect}>CONNECT LACE MIDNIGHT</button>
+          <button style={btnActive} onClick={() => setWalletState('picking')}>CONNECT WALLET</button>
           <button style={{ ...btn, fontSize: '0.4rem', color: '#002200', borderColor: '#001100' }} onClick={handleBypass}>DEV MODE (SKIP WALLET)</button>
         </div>
       )}
@@ -116,10 +144,10 @@ export default function WalletConnect() {
       {walletState === 'not_found' && (
         <div>
           <div style={{ border: '1px solid #003300', padding: '1rem', marginBottom: '1rem', textAlign: 'left' }}>
-            <p style={{ fontSize: '0.45rem', color: '#ff4444', marginBottom: '0.5rem' }}>LACE MIDNIGHT NOT DETECTED</p>
-            <p style={{ fontSize: '0.4rem', color: '#005514' }}>→ lace.io</p>
+            <p style={{ fontSize: '0.45rem', color: '#ff4444', marginBottom: '0.5rem' }}>WALLET NOT DETECTED</p>
+            <p style={{ fontSize: '0.4rem', color: '#005514' }}>→ lace.io / 1am.network</p>
           </div>
-          <button style={btn} onClick={handleConnect}>RETRY DETECTION</button>
+          <button style={btn} onClick={() => setWalletState('picking')}>RETRY</button>
           <button style={{ ...btn, fontSize: '0.4rem', color: '#002200', borderColor: '#001100' }} onClick={handleBypass}>DEV MODE (NO WALLET)</button>
         </div>
       )}
@@ -130,7 +158,7 @@ export default function WalletConnect() {
             <p style={{ fontSize: '0.45rem', color: '#ff4444', marginBottom: '0.5rem' }}>ERROR</p>
             <p style={{ fontSize: '0.4rem', color: '#003300' }}>{errorMsg}</p>
           </div>
-          <button style={btnActive} onClick={handleConnect}>RETRY</button>
+          <button style={btnActive} onClick={() => setWalletState('picking')}>RETRY</button>
           <button style={{ ...btn, fontSize: '0.4rem', color: '#002200', borderColor: '#001100' }} onClick={handleBypass}>DEV MODE</button>
         </div>
       )}
