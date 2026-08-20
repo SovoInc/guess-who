@@ -9,7 +9,7 @@ import { fromHex } from '@midnight-ntwrk/midnight-js-utils';
 import type { WalletContext } from './api.js';
 import { signTransactionIntents, configureProviders, configureGuessWhoProviders, deployGuessWho, createOnChainGame, submitGuessOnChain, getDustBalance } from './api.js';
 import { type Logger } from 'pino';
-import { createSession, answerQuestion, evaluateGuess } from '../../lib/gameManager.js';
+import { createSession, answerQuestion, evaluateGuess, deleteSession } from '../../lib/gameManager.js';
 import { recordGameScore, getLeaderboard, recordGameResult, getPlayerStats, getAllPlayerStats } from '../../lib/scores.js';
 import { awardAchievement, achievementForSpy, getPlayerAchievements, getAllPlayerAchievements, ACHIEVEMENTS } from '../../lib/achievements.js';
 import { claimPoolEntry, getPoolSize } from '../../lib/gamePool.js';
@@ -27,14 +27,31 @@ let sharedContractAddress: string | null = null;
 let activeGameSessions = 0;
 export function isGameSessionActive() { return activeGameSessions > 0; }
 
+// Server-side game rules (must match game/constants.js)
+const MAX_QUESTIONS = 10;
+const TIMER_SECONDS = 180;
+
 // In-memory map from sessionId -> on-chain game_id (bigint) + creation time for TTL cleanup
 const sessionGameIds = new Map<string, { gameId: bigint; createdAt: number }>();
 
-// Clean up abandoned sessions every 10 minutes (TTL = 1 hour)
+// Authoritative per-session state: question count + start time.
+// The client also enforces these limits, but only these values are trusted
+// for scoring and the /api/question limit.
+const sessionMeta = new Map<string, { questionsUsed: number; startedAt: number }>();
+
+// Clean up abandoned sessions every 10 minutes (TTL = 1 hour).
+// Each expired on-chain session releases its activeGameSessions slot so the
+// pool refill worker can recover after abandoned games (never below zero).
 setInterval(() => {
   const cutoff = Date.now() - 60 * 60 * 1000;
   for (const [id, entry] of sessionGameIds.entries()) {
-    if (entry.createdAt < cutoff) sessionGameIds.delete(id);
+    if (entry.createdAt < cutoff) {
+      sessionGameIds.delete(id);
+      activeGameSessions = Math.max(0, activeGameSessions - 1);
+    }
+  }
+  for (const [id, meta] of sessionMeta.entries()) {
+    if (meta.startedAt < cutoff) sessionMeta.delete(id);
   }
 }, 10 * 60 * 1000).unref();
 
@@ -185,6 +202,7 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
             const onChain = await enqueueOnChain(() => createOnChainGame(guessWhoProvidersGlobal, sharedContractAddress!, privateState));
             gameId = onChain.gameId.toString();
             sessionGameIds.set(tempSession.sessionId, { gameId: onChain.gameId, createdAt: Date.now() });
+            sessionMeta.set(tempSession.sessionId, { questionsUsed: 0, startedAt: Date.now() });
             logger.info(`On-chain game created on demand: game_id=${gameId}`);
             // Return the already-created session
             res.json({
@@ -204,6 +222,7 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
 
       const result = await createSession(spyIdOverride, saltOverride);
       logger.info(`Session created: ${result.sessionId}, spyId: ${result.spyId}`);
+      sessionMeta.set(result.sessionId, { questionsUsed: 0, startedAt: Date.now() });
 
       if (gameId) {
         sessionGameIds.set(result.sessionId, { gameId: BigInt(gameId), createdAt: Date.now() });
@@ -226,8 +245,23 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
   app.post('/api/question', async (req, res) => {
     try {
       const { sessionId, category, value } = req.body as { sessionId: string; category: string; value: string };
+
+      // Enforce the question limit server-side — the client counter is advisory only
+      const meta = sessionMeta.get(sessionId);
+      if (meta && meta.questionsUsed >= MAX_QUESTIONS) {
+        return res.status(403).json({ error: 'Question limit reached' });
+      }
+
       const answer = await answerQuestion(sessionId, category, value);
       if (answer === null) return res.status(404).json({ error: 'Session not found' });
+
+      if (meta) {
+        meta.questionsUsed++;
+      } else {
+        // Session exists but meta was lost (e.g. server restart) — start counting now
+        sessionMeta.set(sessionId, { questionsUsed: 1, startedAt: Date.now() });
+      }
+
       res.json({ answer });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -235,7 +269,9 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
   });
 
   /**
-   * Declare the spy. Evaluates the guess off-chain and submits ZK proof on-chain.
+   * Declare the spy. Evaluates the guess off-chain, submits ZK proof on-chain,
+   * and records the score. Score, questions used and time elapsed are all
+   * derived server-side — nothing scoring-related is trusted from the client.
    */
   app.post('/api/declare', async (req, res) => {
     try {
@@ -249,6 +285,18 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
 
       const result = await evaluateGuess(sessionId, guessId);
       if (result === null) return res.status(404).json({ error: 'Session not found' });
+
+      // A declaration ends the game: delete the session so the revealed spy
+      // cannot be re-declared (or re-questioned) for a free win.
+      await deleteSession(sessionId);
+
+      // Authoritative game stats from the server-side session tracker
+      const meta = sessionMeta.get(sessionId);
+      sessionMeta.delete(sessionId);
+      const questionsUsed = meta ? Math.min(meta.questionsUsed, MAX_QUESTIONS) : MAX_QUESTIONS;
+      const timeElapsed = meta
+        ? Math.min(TIMER_SECONDS, Math.round((Date.now() - meta.startedAt) / 1000))
+        : TIMER_SECONDS;
 
       let onChain: { correct: boolean; txId: string } | null = null;
       const onChainGameId = gameId != null ? BigInt(gameId) : sessionGameIds.get(sessionId)?.gameId;
@@ -272,10 +320,44 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
         activeGameSessions = Math.max(0, activeGameSessions - 1);
       }
 
+      // Derive the score server-side: time bonus + question-efficiency bonus.
+      // A wrong guess always scores 0.
+      const timeRemaining = Math.max(0, TIMER_SECONDS - timeElapsed);
+      const score = result.correct
+        ? timeRemaining * 10 + (MAX_QUESTIONS - questionsUsed) * 200
+        : 0;
+
+      // Record score, stats and achievements (demo games are not recorded)
+      const playerAddress = shieldedAddress || 'ANONYMOUS';
+      const newAchievements: Array<{ id: string; name: string; description: string }> = [];
+      if (playerAddress !== 'DEMO') {
+        await recordGameScore({
+          session_id: sessionId,
+          shielded_address: playerAddress,
+          score,
+          questions_used: questionsUsed,
+          time_elapsed: timeElapsed,
+          correct: result.correct,
+        });
+        await recordGameResult(playerAddress, result.correct);
+
+        if (result.correct) {
+          const achId = achievementForSpy(result.spy.name);
+          if (achId) {
+            const unlocked = await awardAchievement(playerAddress, achId);
+            if (unlocked) newAchievements.push(unlocked);
+          }
+        }
+      }
+
       res.json({
         correct: result.correct,
         spy: result.spy,
         onChain,
+        score,
+        questionsUsed,
+        timeElapsed,
+        newAchievements,
       });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -353,33 +435,37 @@ export async function startSponsorServer(ctx: WalletContext, config: import('./c
     }
   });
 
+  /**
+   * Compatibility endpoint for external callers (the client's website posts
+   * here after a game). The score itself is recorded by /api/declare from the
+   * server's own evaluation, so this no longer writes the submitted figures —
+   * doing so is what allowed anyone to curl an arbitrary score onto the
+   * leaderboard, and what double-counted every game that posted here.
+   *
+   * The path and the `{ ok, newAchievements }` response shape are preserved, so
+   * existing callers keep working: it reports the achievements already unlocked
+   * for the address, and is safe to call any number of times.
+   */
   app.post('/api/scores', async (req, res) => {
     try {
-      const { sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct, spyName } = req.body as {
-        sessionId: string;
-        shieldedAddress: string;
-        score: number;
-        questionsUsed: number;
-        timeElapsed: number;
-        correct: boolean;
+      const { shieldedAddress, spyName } = req.body as {
+        shieldedAddress?: string;
         spyName?: string;
       };
 
-      if (shieldedAddress === 'DEMO') {
-        res.json({ ok: true, newAchievements: [] });
-        return;
+      if (!shieldedAddress || shieldedAddress === 'DEMO') {
+        return res.json({ ok: true, newAchievements: [] });
       }
 
-      await recordGameScore({ session_id: sessionId, shielded_address: shieldedAddress, score, questions_used: questionsUsed, time_elapsed: timeElapsed, correct });
-      await recordGameResult(shieldedAddress, correct);
-
-      // Check for newly unlocked achievements
+      // Report the achievement for this spy if the player has it, rather than
+      // awarding anything from client-supplied data.
       const newAchievements: Array<{ id: string; name: string; description: string }> = [];
-      if (correct && spyName) {
+      if (spyName) {
         const achId = achievementForSpy(spyName);
         if (achId) {
-          const unlocked = await awardAchievement(shieldedAddress, achId);
-          if (unlocked) newAchievements.push(unlocked);
+          const held = await getPlayerAchievements(shieldedAddress);
+          const match = held.find(a => a.id === achId);
+          if (match) newAchievements.push({ id: match.id, name: match.name, description: match.description });
         }
       }
 

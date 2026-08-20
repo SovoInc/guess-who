@@ -10,7 +10,7 @@ The game is built with Phaser 3 for the frontend and a Node.js sponsor server th
 2. The player asks yes/no questions to narrow down the suspects
 3. The player accuses someone — the server generates a ZK proof verifying the guess against the stored commitment, without revealing the culprit ID until the proof is verified
 
-**Player lies**: When answering CPU questions, the player can choose to lie. The chain will detect it.
+**Player lies**: When answering CPU questions, the player can choose to lie. Answer consistency is checked locally in the game client (with a time penalty for lies) — only the final guess is verified on-chain by a ZK proof.
 **CPU truth**: The server always answers player questions truthfully.
 
 ## Architecture
@@ -28,7 +28,7 @@ The game is built with Phaser 3 for the frontend and a Node.js sponsor server th
 │  ├── /api/session/start  (claims pre-gen pool game) │
 │  ├── /api/question       (off-chain answer)         │
 │  ├── /api/declare        (ZK proof + on-chain tx)   │
-│  ├── /api/scores         (leaderboard)              │
+│  ├── /api/scores         (leaderboard, read-only)   │
 │  ├── /api/players        (stats + spy counts)       │
 │  ├── /api/achievements   (all player achievements)  │
 │  └── /api/dust           (wallet balance check)     │
@@ -243,6 +243,20 @@ Returns the top 20 correct guesses, ordered by score (desc) then questions used 
 }
 ```
 
+#### `POST /api/scores`
+
+Compatibility endpoint, retained for existing callers. Scores are recorded by
+`/api/declare` from the server's own evaluation of the guess, so this endpoint
+does **not** write the values you submit — submitted scores were forgeable and
+double-counted games that also posted here.
+
+It reports the achievements already unlocked for `shieldedAddress` and is safe
+to call any number of times.
+
+```json
+{ "ok": true, "newAchievements": [] }
+```
+
 ---
 
 ### Player Stats
@@ -332,8 +346,7 @@ Achievement IDs follow the pattern `spy_<agentname>` — one per agent in the ro
 |--------|------|-------------|
 | `POST` | `/api/session/start` | Start a new game session |
 | `POST` | `/api/question` | Ask a yes/no question about the spy |
-| `POST` | `/api/declare` | Submit final guess, generate ZK proof on-chain |
-| `POST` | `/api/scores` | Submit game result (triggers achievement checks, returns `newAchievements`) |
+| `POST` | `/api/declare` | Submit final guess, generate ZK proof on-chain; records the server-computed score and returns `newAchievements` |
 | `GET`  | `/api/status` | Network health (game server, proof server, node, indexer) |
 | `GET`  | `/api/dust` | Sponsor wallet DUST token balance |
 | `GET/POST` | `/api/proof-server` | Get or set proof server mode (`remote` / `local`) |

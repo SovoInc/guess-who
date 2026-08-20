@@ -31,7 +31,9 @@ export async function declareSpy(sessionId, guessId, shieldedAddress, contractAd
       signal: controller.signal,
     });
     if (!res.ok) throw new Error('Failed to declare spy');
-    return res.json(); // { correct, spy, onChain }
+    // Score, questionsUsed and timeElapsed are computed server-side;
+    // achievements are awarded server-side in the same call.
+    return res.json(); // { correct, spy, onChain, score, questionsUsed, timeElapsed, newAchievements }
   } finally {
     clearTimeout(timeout);
   }
@@ -75,16 +77,6 @@ export async function getScores() {
   const res = await fetch(`${BASE}/api/scores`);
   if (!res.ok) throw new Error('Failed to get scores');
   return res.json(); // { leaderboard: [...] }
-}
-
-export async function submitScore(sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct, spyName = null) {
-  const res = await fetch(`${BASE}/api/scores`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, shieldedAddress, score, questionsUsed, timeElapsed, correct, spyName }),
-  });
-  if (!res.ok) throw new Error('Failed to submit score');
-  return res.json(); // { ok, newAchievements: [{id, name, description}] }
 }
 
 export async function getPlayerStats(shieldedAddress) {

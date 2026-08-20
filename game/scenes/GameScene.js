@@ -9,7 +9,7 @@ import { applyCRTOverlay } from '../utils/crt.js';
 import { CharacterCard } from '../ui/CharacterCard.js';
 import { NetworkWindow } from '../ui/NetworkWindow.js';
 import { QuestionPanel } from '../ui/QuestionPanel.js';
-import { askQuestion, declareSpy, submitScore, getScores } from '../api.js';
+import { askQuestion, declareSpy, getScores } from '../api.js';
 import { truncateAddress } from '../wallet.js';
 
 // CPU turn delay after player finishes (ms)
@@ -233,7 +233,7 @@ export class GameScene extends Phaser.Scene {
       color: '#39ff14',
     });
 
-    this.scoreText = this.add.text(gameW - 12, 8, 'SCORE: 0', {
+    this.scoreText = this.add.text(gameW - 12, 8, 'COMBO: 0', {
       fontFamily: "'Press Start 2P', monospace",
       fontSize: fs,
       color: '#39ff14',
@@ -285,9 +285,11 @@ export class GameScene extends Phaser.Scene {
     this.timerText.setColor(s.timeSeconds < 30 ? '#ff4444' : '#00ff41');
     this.questionsText.setText(`Q: ${s.questionsLeft}`);
     this.questionsText.setColor(s.questionsLeft <= 2 ? '#ffaa00' : '#39ff14');
-    this.scoreText.setText(`SCORE: ${this._comboScore ?? 0}`);
+    this.scoreText.setText(`COMBO: ${this._comboScore ?? 0}`);
   }
 
+  // Dev-mode fallback only — the recorded score is computed server-side in
+  // /api/declare and returned in the declare response.
   _calcScore(correct) {
     if (!correct) return 0;
     // Combo points earned during play + time bonus for correct guess
@@ -1018,10 +1020,12 @@ export class GameScene extends Phaser.Scene {
     noHit.on('pointerdown', () => { if (this.sound) this.sound.click(); destroy(); onAnswer('NO'); });
   }
 
-  // Run 0→100% bar, then flash TRUE/FALSE result (ZK selective disclosure style)
+  // Run 0→100% bar, then flash TRUE/FALSE result.
+  // This is a purely local, cosmetic answer-check animation — no chain call
+  // is made here. Only the final guess is verified on-chain (via /api/declare).
   // truthValue: actual boolean result to reveal at 100%
   // onComplete: called after result flashes (so game logic can continue)
-  _runChainVerify(truthValue, onComplete) {
+  _runAnswerCheck(truthValue, onComplete) {
     this._clearVerify();
     const { _dialogX: bx, _dialogY: by, _dialogW: bw, _dialogH: bh } = this;
     // Bar sits at fixed position below question text (matches _buildPlayerDialogBox verifyY)
@@ -1053,14 +1057,14 @@ export class GameScene extends Phaser.Scene {
         this.dialogVerifyBarFill.fillStyle(barColor, 0.9);
         this.dialogVerifyBarFill.fillRect(barX, barY, fillW, 7);
 
-        this.dialogVerifyLabel.setText(`⛓ VERIFYING: ${pct.toFixed(0)}%`).setColor('#00aa22');
+        this.dialogVerifyLabel.setText(`CHECKING ANSWER: ${pct.toFixed(0)}%`).setColor('#00aa22');
 
         if (pct >= 100) {
           // Resolve: flash TRUE / FALSE
           const resultText = truthValue ? 'TRUE' : 'FALSE';
           const resultColor = truthValue ? '#00ff41' : '#ff4444';
 
-          this.dialogVerifyLabel.setText('⛓ CHAIN RESOLVED').setColor('#00aa22');
+          this.dialogVerifyLabel.setText('ANSWER CHECKED').setColor('#00aa22');
           this.dialogResultStamp.setText(resultText).setColor(resultColor);
 
           // Stamp flash tween
@@ -1343,7 +1347,7 @@ export class GameScene extends Phaser.Scene {
         this._switchDialogToCpu();
         if (this.dialogLine1) this.dialogLine1.setText('[ RESPONSE ]').setColor('#ff6600');
         this._typeDialogText(this.dialogLine2, `→ ${answer}`, color, () => {
-          this._runChainVerify(answerBool, () => {
+          this._runAnswerCheck(answerBool, () => {
             const valDisplay = value.replace(/_/g, ' ').toUpperCase();
             if (answerBool) {
               this.networkWindow.log(`⛓ YES: CLEAR AGENTS WITHOUT ${valDisplay}`, '#00ff41');
@@ -1472,25 +1476,14 @@ export class GameScene extends Phaser.Scene {
         // Dev mode: evaluate locally; demo mode: call server but no wallet/contract = no blockchain submission
         const result = this._devCpuSpyId !== null
           ? { correct: character.id === this._devCpuSpyId, spy: this.characters[this._devCpuSpyId], onChain: null, proof: null }
-          : await declareSpy(this.sessionId, character.id, this.walletAddress, this.demoMode ? null : this.gameContractAddress, this.demoMode ? null : this.gameId);
-        const score = this._calcScore(result.correct);
+          : await declareSpy(this.sessionId, character.id, this.demoMode ? 'DEMO' : (this.walletAddress || 'ANONYMOUS'), this.demoMode ? null : this.gameContractAddress, this.demoMode ? null : this.gameId);
+        // Score, questions used and time elapsed are computed and recorded
+        // server-side in /api/declare; fall back to local values in dev mode.
+        const score = result.score ?? this._calcScore(result.correct);
+        const newAchievements = result.newAchievements || [];
 
         this._hideDeclareLoader();
         this.networkWindow.showProofResult(result.correct, result.onChain?.txId, this.sound);
-
-        let newAchievements = [];
-        try {
-          const scoreRes = await submitScore(
-            this.sessionId,
-            this.walletAddress || 'ANONYMOUS',
-            score,
-            MAX_QUESTIONS - this.state.questionsLeft,
-            TIMER_SECONDS - this.state.timeSeconds,
-            result.correct,
-            result.spy?.name || null,
-          );
-          newAchievements = scoreRes?.newAchievements || [];
-        } catch (e) {}
 
         // Log on-chain result if available
         if (result.onChain) {
@@ -1504,8 +1497,8 @@ export class GameScene extends Phaser.Scene {
             won: result.correct,
             spy: result.spy,
             score,
-            questionsUsed: MAX_QUESTIONS - this.state.questionsLeft,
-            timeElapsed: TIMER_SECONDS - this.state.timeSeconds,
+            questionsUsed: result.questionsUsed ?? MAX_QUESTIONS - this.state.questionsLeft,
+            timeElapsed: result.timeElapsed ?? TIMER_SECONDS - this.state.timeSeconds,
             proof: result.proof,
             txId: result.onChain?.txId ?? null,
             newAchievements,
@@ -1690,7 +1683,6 @@ export class GameScene extends Phaser.Scene {
       const qVal = question.value.toUpperCase();
       const correctAnswer = spyVal === qVal ? 'YES' : 'NO';
       const wasLie = playerAnswer !== correctAnswer;
-      console.log(`[LIE CHECK] spy=${playerSpy.name} prop=${prop} spyVal=${spyVal} qVal=${qVal} correct=${correctAnswer} player=${playerAnswer} wasLie=${wasLie}`);
 
       // Track CPU question for end-game log
       if (!this.state.cpuQuestions) this.state.cpuQuestions = [];
@@ -1708,16 +1700,17 @@ export class GameScene extends Phaser.Scene {
         this.dialogLine1.setText(`YOU: ${playerAnswer}${wasLie ? ' [LIE]' : ''}`).setColor(wasLie ? '#ff4444' : answerColor);
       }
 
-      // Chain verify — truth value is whether the player was honest
+      // Local consistency check — truth value is whether the player was honest.
+      // This runs entirely in the client; only the final guess is chain-verified.
       const truthBool = !wasLie;
-      this._runChainVerify(truthBool, () => {
-        this.networkWindow.log(`⛓ CHAIN: ${truthBool ? 'VERIFIED' : 'DECEPTION DETECTED'}`, truthBool ? '#00ff41' : '#ff4444');
+      this._runAnswerCheck(truthBool, () => {
+        this.networkWindow.log(`ANSWER CHECK: ${truthBool ? 'CONSISTENT' : 'DECEPTION DETECTED'}`, truthBool ? '#00ff41' : '#ff4444');
 
         if (wasLie) {
           this._penalizePlayerTime(LIE_PENALTY);
         }
 
-        // CPU eliminates based on the true answer (chain always reveals truth)
+        // CPU eliminates based on the true answer (the consistency check reveals lies)
         const cat = _catToProp(question.category);
         const playerSpy = this.characters[this.playerSpyId];
         const trueAnswer = String(playerSpy[cat]).toUpperCase() === question.value.toUpperCase() ? 'YES' : 'NO';

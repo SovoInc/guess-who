@@ -11,6 +11,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "bash scripts/typecheck-server.sh",
     "server:preview": "npm run preview --workspace=server",
     "server:preprod": "npm run preprod --workspace=server",
     "server:mainnet": "npm run mainnet --workspace=server",

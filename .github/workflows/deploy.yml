@@ -5,7 +5,31 @@ on:
     branches: [main]
 
 jobs:
+  # Quality gate — deploy only runs if this passes, so a failing test or a new
+  # type error stops the release instead of reaching production.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Typecheck (server)
+        run: npm run typecheck
+
+      - name: Typecheck (contract)
+        run: npm run typecheck --workspace=contract
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,8 +89,9 @@ jobs:
           rsync -az -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
             contract/ ec2-user@${EC2_HOST}:/opt/proof-of-spy/contract/
 
-          # Sync lib
+          # Sync lib (tests are not needed at runtime)
           rsync -az -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
+            --exclude='__tests__' \
             lib/ ec2-user@${EC2_HOST}:/opt/proof-of-spy/lib/
 
           # Sync root package.json (needed for workspaces)

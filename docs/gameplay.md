@@ -34,8 +34,9 @@ the start).
    eliminate your own spy.
 
 > **Honesty matters.** When it's the CPU's turn it asks *you* a question. If you
-> answer dishonestly (a "lie"), the chain verification catches it and you take a
-> **10-second time penalty**.
+> answer dishonestly (a "lie"), a local answer-consistency check in the game
+> client catches it and you take a **10-second time penalty**. (Only your final
+> guess is verified on-chain by a ZK proof — lie detection is not on-chain.)
 
 ### CPU turn
 
@@ -77,32 +78,37 @@ There is no "try again" on a declaration — a wrong guess ends the game.
 ## Scoring
 
 Your final score is **0 if your guess is wrong**. If you declare the correct
-spy, your score is the sum of the **combo points** you earned during play plus a
-**time bonus**:
+spy, your score is computed **by the server** when you declare — it is the sum
+of a **time bonus** and a **question-efficiency bonus**:
 
 ```
-finalScore = comboPointsEarned + (timeRemaining * 10)
+finalScore = (timeRemaining * 10) + (questionsRemaining * 200)
 ```
-
-### Combo points (earned while eliminating)
-
-How you earn points for an elimination depends on whether you used the
-information ("intel") from your questions:
-
-| Elimination type | Points |
-|---|---|
-| **Full combo** — eliminating all cards ruled out by a piece of intel | **200 × N** (N = cards eliminated) |
-| **Partial intel** — eliminating a card supported by intel | **100** per card |
-| **Wild guess** — eliminating a card with no supporting intel | **0** (and a warning) |
-
-The takeaway: ask questions, then eliminate the suspects your answers rule out —
-clearing a whole group at once is worth the most.
 
 ### Time bonus
 
 - Every second left on the clock when you declare correctly is worth **10
   points**.
 - With a 180-second timer, the maximum time bonus is **1,800 points**.
+
+### Question-efficiency bonus
+
+- Every unused question (out of 10) is worth **200 points** when you declare
+  correctly — up to **2,000 points**.
+
+### Combo meter (in-game feedback)
+
+While you play, the HUD shows a **combo meter** that rewards eliminating with
+intel. It is play-style feedback only and does not affect your recorded score:
+
+| Elimination type | Combo points |
+|---|---|
+| **Full combo** — eliminating all cards ruled out by a piece of intel | **200 × N** (N = cards eliminated) |
+| **Partial intel** — eliminating a card supported by intel | **100** per card |
+| **Wild guess** — eliminating a card with no supporting intel | **0** (and a warning) |
+
+The takeaway: ask questions, then eliminate the suspects your answers rule out —
+and declare quickly, with questions to spare, for the best score.
 
 ## After the Game
 
@@ -111,10 +117,18 @@ clearing a whole group at once is worth the most.
   your shielded wallet address, score, questions used, time elapsed, and date.
 - **Player stats** — your total `spies_caught` and `games_played` are tracked
   per wallet address.
-- **Achievements** — there is a unique achievement for each catchable spy
-  (Viper, Cipher, Nova, Phantom, Rook, Echo, Lancer, Blaze, Jade, Steel, Iris,
-  Kade, Orion, Sable, Wren, Zara). Each unlocks once, the first time you
-  correctly identify that spy.
+- **Achievements** — there is a unique achievement for each of the 32 roster
+  agents, unlocked once the first time you correctly identify that agent as
+  the spy:
+  - Atlas Toppled, Falcon Downed, Vega Eclipsed, Titan Felled, Blaze Doused,
+    Halo Dimmed, Razor Dulled, Sentinel Stood Down (bucket A)
+  - Viper Exposed, Raven Caged, Bishop Checked, Echo Silenced, Hydra Beheaded,
+    Nova Neutralised, Cipher Cracked, Pulse Flatlined (bucket B)
+  - Archer Disarmed, Orion Grounded, Kraken Sunk, Wolf Collared, Talon Clipped,
+    Zenith Lowered, Frost Thawed, Nomad Cornered (bucket C)
+  - Ghost Busted, Cobra Defanged, Phantom Unmasked, Shade Illuminated,
+    Striker Benched, Loki Outfoxed, Dagger Sheathed, Vector Nullified
+    (bucket D)
 
 ## Game Flow at a Glance
 

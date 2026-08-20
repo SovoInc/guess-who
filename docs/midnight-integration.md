@@ -82,9 +82,9 @@ need funds.
    no transaction involved.
 4. **Declare** (`POST /api/declare`). The server builds the private state
    (`{ culpritId, salt }`) and runs `submit_guess(gameId, guessId)`, signs the
-   transaction, submits it to the chain, and returns `{ correct, txId }`.
-5. **Score** (`POST /api/scores`). Records the leaderboard entry and awards any
-   achievements.
+   transaction, submits it to the chain, computes and records the score and
+   any achievements server-side, and returns
+   `{ correct, txId, score, questionsUsed, timeElapsed, newAchievements }`.
 
 ## DUST Coin & Transaction Fees
 
