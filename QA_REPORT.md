@@ -84,13 +84,15 @@ It has been unreachable since **10 August**, ten days before these deploys were 
 
 Note that `games.sovo.com` resolves to CloudFront, so the site answering HTTPS `200` reflects the CDN serving previously-deployed assets, **not** a healthy origin.
 
-**Recovery.** A stop/start migrates the instance to different underlying hardware and is the standard remedy for a failed reachability check; a plain reboot usually does not clear it. The public address is an Elastic IP, so it survives a stop/start and no DNS change is needed.
+**Recovered.** A stop/start migrated the instance to different underlying hardware, which is the standard remedy for a failed reachability check (a plain reboot usually does not clear it). Both status checks now report `ok`, SSH works, the `proof-server` unit is active, both PM2 apps are online, and **this repository now deploys green end to end** — `test` and `deploy` jobs alike. The public address is an Elastic IP, so it survived the restart and no DNS change was needed.
+
+One follow-on problem surfaced during recovery: after the outage the sponsor wallet's cached state was stale and failed to replay dust events (`values inserted non-linearly into dust generation tree`), leaving the process `online` under PM2 while never binding its port. The mainnet wallet cache was backed up to `/home/ec2-user/wallet-cache-backup-*` and cleared so the wallet resyncs cleanly; the preprod cache was left untouched. A full mainnet sync takes a long time, so verify readiness by curling `/api/status` on the box rather than trusting the deploy's green tick — this is precisely the health-check weakness described in §2.
 
 One precaution has already been taken: the 20 GB gp3 root volume (`vol-01ca8f98b7bf06c19`) **had no snapshots at all and is flagged delete-on-termination**. This app's leaderboard lives in an external Postgres (`POSTGRES_URL`) and so is not at risk, but the volume does hold `server/wallet-cache/`, the private-state store, and the sibling shadow-cipher app's entire SQLite database. A full snapshot now exists — `snap-0e32c606a5cd054d0`, tagged `mf-games-pre-recovery`, **completed** — so the stop/start is safe to attempt against that backup.
 
 **A recurring snapshot schedule should be added regardless of how this is resolved** — an AWS Backup plan or DLM lifecycle policy on this volume is a few minutes of setup, and its absence is the largest operational risk across both deployments.
 
-**Until the instance is recovered, the live site does not reflect any of the fixes in this report.**
+The fixes in this report are now deployed. The remaining gate on the app serving traffic is the sponsor wallet's mainnet resync, which was still in progress at the time of writing.
 
 The `test` job runs before the deploy job and passes, so the quality gate is not what is blocking the release.
 
