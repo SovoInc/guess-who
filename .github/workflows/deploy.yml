@@ -3,6 +3,8 @@ name: Deploy
 on:
   push:
     branches: [main]
+  # Allows a redeploy without a commit, e.g. after an infrastructure outage.
+  workflow_dispatch:
 
 jobs:
   # Quality gate — deploy only runs if this passes, so a failing test or a new
