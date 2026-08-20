@@ -63,9 +63,19 @@ Because `server/src/api.ts` carries 4 pre-existing wallet-SDK type errors that c
 
 Worth recording separately, because it is independent of the application code:
 
-**The production deploy is currently failing at the EC2 connection step**, and was already failing before these changes. The `Deploy to EC2` step ends in `ssh: connect to host *** port 22: Connection timed out`, so nothing reaches the instance — the frontend build succeeds, then every rsync and the PM2 restart are skipped. Either the instance is stopped, its address has changed, or its security group no longer admits GitHub Actions runners. **The live site therefore does not yet reflect these fixes**, and this needs an infrastructure fix (or a corrected `EC2_HOST` secret) rather than a code change.
+**The production deploy is failing at the EC2 connection step**, and was already failing before these changes. The `Deploy to EC2` step ends in:
 
-The new `test` job runs before the deploy job and passes, so the gate is not what is blocking the release.
+```
+ssh: connect to host *** port 22: Connection timed out
+```
+
+so nothing reaches the instance — the frontend build succeeds, then every rsync and the PM2 restart are skipped.
+
+**The instance itself is healthy.** `https://games.sovo.com/` answers `200` and port 443 accepts connections, so the box is running and serving the previously-deployed build; only port 22 times out, from GitHub Actions runners and from a local machine alike. That points at **SSH ingress** — most likely a security-group rule that no longer admits the runners (their IP ranges are wide and change) — rather than a stopped instance or a stale `EC2_HOST`.
+
+Suggested fix, in order of likelihood: confirm port 22 ingress on the instance's security group; if it was restricted to specific addresses, either widen it to GitHub's published Actions ranges or switch the deploy to a self-hosted runner, AWS SSM Session Manager, or a bastion. **Until then the live site does not reflect any of the fixes in this report.**
+
+The `test` job runs before the deploy job and passes, so the quality gate is not what is blocking the release.
 
 ---
 
@@ -107,6 +117,8 @@ The inverse was also true: 23 real characters (Atlas, Falcon, Vega, Titan, Halo,
 **Fix.** `/api/declare` now derives every scoring input server-side and records the result itself: `questionsUsed` from a server-side counter, `timeElapsed` from the server's own clock, and the score from those two values, with a wrong guess always scoring zero. The game client displays what the server recorded rather than reporting its own figures. Demo sessions are excluded from recording.
 
 `POST /api/scores` is **retained as a compatibility endpoint**, since it is part of the published API that external callers use. It keeps its exact path and `{ ok, newAchievements }` response shape, but it no longer writes the submitted numbers — it reports the achievements already unlocked for the address and is safe to call repeatedly. That closes the forgery hole and the double-count without breaking any existing caller.
+
+One behavioural difference for integrators: `newAchievements` now reports the spy achievement whenever the player holds it, rather than only on the call that first unlocked it. A caller that announces "new achievement" directly from this field will announce it on every call, and should compare against what it has already shown.
 
 **All read endpoints are unchanged** — `GET /api/scores`, `/api/players`, `/api/players/:address/stats`, `/api/players/:address/achievements`, `/api/achievements`, `/metrics`, `/metrics/users/:address`, and `/metrics/:channel` keep their paths and response shapes, and are still populated by the same recording calls. Anything consuming the leaderboard or achievement data is unaffected.
 
