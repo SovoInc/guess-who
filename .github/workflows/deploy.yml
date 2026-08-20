@@ -22,11 +22,16 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Typecheck (server)
-        run: npm run typecheck
+      # The server imports the contract package by name, and contract/dist is
+      # gitignored, so its type declarations have to be built before typechecking.
+      - name: Build contract
+        run: npm run build --workspace=contract
 
       - name: Typecheck (contract)
         run: npm run typecheck --workspace=contract
+
+      - name: Typecheck (server)
+        run: npm run typecheck
 
   deploy:
     needs: test
