@@ -71,9 +71,24 @@ ssh: connect to host *** port 22: Connection timed out
 
 so nothing reaches the instance — the frontend build succeeds, then every rsync and the PM2 restart are skipped.
 
-**The instance itself is healthy.** `https://games.sovo.com/` answers `200` and port 443 accepts connections, so the box is running and serving the previously-deployed build; only port 22 times out, from GitHub Actions runners and from a local machine alike. That points at **SSH ingress** — most likely a security-group rule that no longer admits the runners (their IP ranges are wide and change) — rather than a stopped instance or a stale `EC2_HOST`.
+**Root cause: the EC2 instance has failed its AWS reachability check.** The host is `mf-games` (`i-0364549066b2aab49`, `t3.medium`, us-east-2, Elastic IP `18.116.1.62`), shared with the sibling shadow-cipher deployment:
 
-Suggested fix, in order of likelihood: confirm port 22 ingress on the instance's security group; if it was restricted to specific addresses, either widen it to GitHub's published Actions ranges or switch the deploy to a self-hosted runner, AWS SSM Session Manager, or a bastion. **Until then the live site does not reflect any of the fixes in this report.**
+```
+InstanceState: running
+SystemStatus:  ok
+InstanceStatus: impaired
+  reachability: failed, ImpairedSince 2026-08-10T06:36:00Z
+```
+
+It has been unreachable since **10 August**, ten days before these deploys were attempted. This is not a configuration problem: the `proof-of-spy-sg` security group allows port 22 from `0.0.0.0/0`, the subnet's network ACL has only the default catch-all denies, and SSH with the correct key still times out. The console log shows a normal boot that subsequently went unresponsive, consistent with a wedged instance.
+
+Note that `games.sovo.com` resolves to CloudFront, so the site answering HTTPS `200` reflects the CDN serving previously-deployed assets, **not** a healthy origin.
+
+**Recovery.** A stop/start migrates the instance to different underlying hardware and is the standard remedy for a failed reachability check; a plain reboot usually does not clear it. The public address is an Elastic IP, so it survives a stop/start and no DNS change is needed.
+
+One precaution first: the 20 GB gp3 root volume (`vol-01ca8f98b7bf06c19`) **had no snapshots and is flagged delete-on-termination**. This app's leaderboard lives in an external Postgres (`POSTGRES_URL`) and so is not at risk, but the volume does hold `server/wallet-cache/`, the private-state store, and the sibling shadow-cipher app's entire SQLite database. A snapshot has been taken (`snap-0e32c606a5cd054d0`, "mf-games-pre-recovery") before any recovery attempt. A recurring snapshot schedule should be added regardless of how this is resolved.
+
+**Until the instance is recovered, the live site does not reflect any of the fixes in this report.**
 
 The `test` job runs before the deploy job and passes, so the quality gate is not what is blocking the release.
 
