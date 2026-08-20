@@ -154,6 +154,8 @@ One behavioural difference for integrators: `newAchievements` now reports the sp
 
 **All read endpoints are unchanged** — `GET /api/scores`, `/api/players`, `/api/players/:address/stats`, `/api/players/:address/achievements`, `/api/achievements`, `/metrics`, `/metrics/users/:address`, and `/metrics/:channel` keep their paths and response shapes, and are still populated by the same recording calls. Anything consuming the leaderboard or achievement data is unaffected.
 
+**Existing leaderboard rows are unverified.** The live table currently holds 3 entries (one under `ANONYMOUS`), all recorded through the old client-trusted endpoint, so their scores were never checked against server-side evaluation. They are few enough to leave in place, but should not be presented as verified results; scores recorded from now on are derived server-side. Verified against production: posting a fabricated `score: 999999` to `POST /api/scores` no longer alters the leaderboard.
+
 **A replay hole was found and closed while verifying this.** `/api/declare` previously left the session alive, and because it reveals the spy even on a wrong guess, a player could declare wrongly, read the answer, then declare again for a credited win. The session is now deleted once a guess is evaluated, so a second declare and any further question both fail. This also enforces "a wrong guess ends the game" off-chain; the on-chain half remains open as Issue 5.
 
 One consequence worth flagging: the recorded score formula necessarily changed, because the old client-side combo points cannot be verified by the server. The in-game combo meter is retained as feedback and relabelled `COMBO`, and the scoring section of `docs/gameplay.md` was rewritten to describe what is actually recorded.
