@@ -86,7 +86,9 @@ Note that `games.sovo.com` resolves to CloudFront, so the site answering HTTPS `
 
 **Recovery.** A stop/start migrates the instance to different underlying hardware and is the standard remedy for a failed reachability check; a plain reboot usually does not clear it. The public address is an Elastic IP, so it survives a stop/start and no DNS change is needed.
 
-One precaution first: the 20 GB gp3 root volume (`vol-01ca8f98b7bf06c19`) **had no snapshots and is flagged delete-on-termination**. This app's leaderboard lives in an external Postgres (`POSTGRES_URL`) and so is not at risk, but the volume does hold `server/wallet-cache/`, the private-state store, and the sibling shadow-cipher app's entire SQLite database. A snapshot has been taken (`snap-0e32c606a5cd054d0`, "mf-games-pre-recovery") before any recovery attempt. A recurring snapshot schedule should be added regardless of how this is resolved.
+One precaution has already been taken: the 20 GB gp3 root volume (`vol-01ca8f98b7bf06c19`) **had no snapshots at all and is flagged delete-on-termination**. This app's leaderboard lives in an external Postgres (`POSTGRES_URL`) and so is not at risk, but the volume does hold `server/wallet-cache/`, the private-state store, and the sibling shadow-cipher app's entire SQLite database. A full snapshot now exists — `snap-0e32c606a5cd054d0`, tagged `mf-games-pre-recovery`, **completed** — so the stop/start is safe to attempt against that backup.
+
+**A recurring snapshot schedule should be added regardless of how this is resolved** — an AWS Backup plan or DLM lifecycle policy on this volume is a few minutes of setup, and its absence is the largest operational risk across both deployments.
 
 **Until the instance is recovered, the live site does not reflect any of the fixes in this report.**
 
