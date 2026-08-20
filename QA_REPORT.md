@@ -59,6 +59,14 @@ Both roster and achievement suites were verified to fail on the original defects
 
 Because `server/src/api.ts` carries 4 pre-existing wallet-SDK type errors that cannot be fixed without patching the SDK's published types, the server typecheck runs through `scripts/typecheck-server.sh`, which tolerates exactly those 4 known `isSynced` errors and fails on anything else. This was verified by introducing a deliberate type error, which the script rejected. The final deploy health check is still `sleep 5 && pm2 status`, which reports success as long as the process exists.
 
+### Deployment status
+
+Worth recording separately, because it is independent of the application code:
+
+**The production deploy is currently failing at the EC2 connection step**, and was already failing before these changes. The `Deploy to EC2` step ends in `ssh: connect to host *** port 22: Connection timed out`, so nothing reaches the instance — the frontend build succeeds, then every rsync and the PM2 restart are skipped. Either the instance is stopped, its address has changed, or its security group no longer admits GitHub Actions runners. **The live site therefore does not yet reflect these fixes**, and this needs an infrastructure fix (or a corrected `EC2_HOST` secret) rather than a code change.
+
+The new `test` job runs before the deploy job and passes, so the gate is not what is blocking the release.
+
 ---
 
 ## 3. Known issues
