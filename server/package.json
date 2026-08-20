@@ -1,17 +1,14 @@
 {
-  "name": "@midnight-ntwrk/counter-cli",
+  "name": "@midnight-ntwrk/guess-who-server",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "standalone": "docker compose -f standalone.yml pull && node --experimental-specifier-resolution=node --import tsx/esm src/standalone.ts",
-    "test-api": "docker compose -f standalone.yml pull && DEBUG='testcontainers' vitest run",
     "build": "rm -rf dist && tsc --project tsconfig.build.json",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "node --experimental-specifier-resolution=node --import tsx/esm src/preview.ts",
-    "preview-ps": "docker compose -f proof-server.yml pull && node --experimental-specifier-resolution=node --import tsx/esm src/preview-start-proof-server.ts",
     "preprod": "node --experimental-specifier-resolution=node --import tsx/esm src/preprod.ts",
     "preprod-ps": "docker compose -f proof-server.yml pull && node --experimental-specifier-resolution=node --import tsx/esm src/preprod-start-proof-server.ts",
     "mainnet": "node --experimental-specifier-resolution=node --import tsx/esm src/mainnet.ts",
@@ -19,7 +16,7 @@
     "deploy:mainnet": "node --experimental-specifier-resolution=node --import tsx/esm src/deploy-mainnet.ts"
   },
   "dependencies": {
-    "@midnight-ntwrk/counter-contract": "*",
+    "@midnight-ntwrk/guess-who-contract": "*",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
     "express": "^4.18.0"

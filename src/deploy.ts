@@ -5,7 +5,7 @@ import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-p
 import { deployContract } from '@midnight-ntwrk/midnight-js-contracts';
 import { ZKConfigProvider, createVerifierKey, createProverKey, createZKIR, createProofProvider, type MidnightProvider, type WalletProvider } from '@midnight-ntwrk/midnight-js-types';
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
-import { GuessWho, guessWhoWitnesses } from '@midnight-ntwrk/counter-contract';
+import { GuessWho, guessWhoWitnesses } from '@midnight-ntwrk/guess-who-contract';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { u8aToHex } from '@polkadot/util';
 

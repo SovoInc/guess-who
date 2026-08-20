@@ -64,7 +64,7 @@ let guessWhoCompiledContract: any = null;
 
 async function getGuessWhoCompiledContract() {
   if (guessWhoCompiledContract) return guessWhoCompiledContract;
-  const { GuessWho, guessWhoWitnesses } = await import('@midnight-ntwrk/counter-contract');
+  const { GuessWho, guessWhoWitnesses } = await import('@midnight-ntwrk/guess-who-contract');
   guessWhoCompiledContract = CompiledContract.make('guess_who', GuessWho.Contract).pipe(
     CompiledContract.withWitnesses(guessWhoWitnesses),
     CompiledContract.withCompiledFileAssets(contractConfig.guessWhoZkConfigPath),

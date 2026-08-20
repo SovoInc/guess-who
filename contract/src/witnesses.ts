@@ -1,10 +1,3 @@
-// Counter private state (kept for counter compat)
-export type CounterPrivateState = {
-  privateCounter: number;
-};
-
-export const witnesses = {};
-
 // GuessWho private state — holds the secret culprit id and per-game salt
 export type GuessWhoPrivateState = {
   culpritId: number;   // 0–15, the character index — stays private
