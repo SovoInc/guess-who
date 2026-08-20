@@ -23,10 +23,10 @@ The application builds, the on-chain commitment/reveal design is sound, and the 
 | Frontend build (`npm run build`) | Pass |
 | Contract typecheck | Pass |
 | Server typecheck | 4 errors — `isSynced` property issues in `server/src/api.ts` against the wallet SDK types, pinned as a baseline so new errors fail CI |
-| Automated tests for game logic | 43 tests covering the roster, achievements, session logic, and API compatibility |
+| Automated tests for game logic | 53 tests covering the roster, achievements, session logic, API compatibility, and the contract surface |
 | CI quality gate | Tests and typechecks gate the deploy |
 
-**Recommendation:** the player-visible correctness defects are resolved and scoring is now server-authoritative, so the leaderboard reflects play rather than client claims. Two things still overstate the product and should be addressed before wider promotion: the contract does not close a game on a wrong guess (Issue 5), and the ZK circuits have no test coverage. Neither blocks a client demo of current status.
+**Recommendation:** the player-visible correctness defects are resolved and scoring is now server-authoritative, so the leaderboard reflects play rather than client claims. One gap between the shipped code and the documented design remains: the contract does not close a game on a wrong guess (Issue 5), which needs a newer Compact toolchain to fix safely. Executing the circuits against a ledger is also still untested, though their surface and witnesses are now covered. Neither blocks a client demo of current status.
 
 ---
 
@@ -34,7 +34,7 @@ The application builds, the on-chain commitment/reveal design is sound, and the 
 
 Game-logic coverage was previously **0%** — nothing exercised the board, the roster, the achievements, or any endpoint, and the root `package.json` had no `test` script, so `npm test` did nothing. That absence is what allowed Issues 1 and 2 to reach `main` unnoticed.
 
-**A unit-test suite now covers the defects that shipped — 43 tests, all passing (`npm test`):**
+**A unit-test suite now covers the defects that shipped — 53 tests, all passing (`npm test`):**
 
 | Suite | Covers |
 |---|---|
@@ -42,6 +42,7 @@ Game-logic coverage was previously **0%** — nothing exercised the board, the r
 | `lib/__tests__/achievements.test.ts` | That no achievement references a character outside the roster, that no roster agent is left without one, and that `achievementForSpy()` resolves for all 32 agents, is case-insensitive, and returns null rather than a dangling id for an unknown name. |
 | `lib/__tests__/gameManager.test.ts` | Board generation (16 distinct agents, contiguous ids, attributes preserved from the roster, deduction constraints satisfied across 60 generated boards); `answerQuestion` answering truthfully from the values the client rendered, across every question category; `evaluateGuess` accepting only the spy; and `deleteSession` blocking a re-declare or further questions once a game has ended. |
 | `lib/__tests__/apiCompat.test.ts` | That every endpoint consumed by the external site stays mounted (the leaderboard, player-stats, achievement and `/metrics` paths, including `POST /api/scores`), that the retained `POST /api/scores` records nothing from the request body, and that `/metrics/users/:address` is registered before the `/metrics/:channel` catch-all. |
+| `lib/__tests__/circuits.test.ts` | The contract surface, loaded from the committed build so no Compact compiler is needed: that exactly the three shipped circuits exist and are callable in both impure and provable form, and that the witnesses feeding the commitment cover all 16 board positions and return a 32-byte salt byte-for-byte without mutating private state — a witness that did would desynchronise the commitment from what `submit_guess` later proves against. Two further tests pin the Issue 5 defect in the circuit source, so the omission is visible in the suite rather than only in prose. |
 
 The suite runs against the in-memory session store, so it needs no database.
 
@@ -51,7 +52,7 @@ Both roster and achievement suites were verified to fail on the original defects
 
 | Target | Why it matters |
 |---|---|
-| Contract circuits via a `GuessWhoSimulator` | The ZK logic remains entirely unverified — the largest remaining gap |
+| Executing the circuits against a ledger | The circuit *surface* and its witnesses are now covered, but running `create_game` → `submit_guess` to assert the commitment check accepts a correct guess and rejects a wrong one needs a proof server, so the ZK logic itself is still unverified end to end |
 | `/api/declare` end to end | The scoring inputs and session teardown are tested; the handler wiring and on-chain fallback are not |
 | Frontend rendering and elimination logic | No frontend tests |
 
@@ -86,7 +87,19 @@ Note that `games.sovo.com` resolves to CloudFront, so the site answering HTTPS `
 
 **Recovered.** A stop/start migrated the instance to different underlying hardware, which is the standard remedy for a failed reachability check (a plain reboot usually does not clear it). Both status checks now report `ok`, SSH works, the `proof-server` unit is active, both PM2 apps are online, and **this repository now deploys green end to end** — `test` and `deploy` jobs alike. The public address is an Elastic IP, so it survived the restart and no DNS change was needed.
 
-One follow-on problem surfaced during recovery: after the outage the sponsor wallet's cached state was stale and failed to replay dust events (`values inserted non-linearly into dust generation tree`), leaving the process `online` under PM2 while never binding its port. The mainnet wallet cache was backed up to `/home/ec2-user/wallet-cache-backup-*` and cleared so the wallet resyncs cleanly; the preprod cache was left untouched. A full mainnet sync takes a long time, so verify readiness by curling `/api/status` on the box rather than trusting the deploy's green tick — this is precisely the health-check weakness described in §2.
+Two follow-on problems surfaced during recovery:
+
+- **Stale wallet cache.** After the outage the sponsor wallet's cached state failed to replay dust events (`values inserted non-linearly into dust generation tree`), leaving the process `online` under PM2 while never binding its port. The mainnet cache was backed up to `/home/ec2-user/wallet-cache-backup-*` and cleared so the wallet resyncs from chain; the preprod cache was left untouched. The error has not recurred.
+
+- **Memory is tight when both apps sync at once.** This app and the sibling shadow-cipher deployment share the box, and each syncing wallet holds ~1.5 GB of the t3.medium's 3.8 GB, leaving ~460 MB free with no swap. The two use different sponsor wallets, so the sync cannot be shared — each must scan the chain for its own UTXOs and dust; only the `proof-server` on port 6300 is shared. Bringing the wallets up one at a time avoids the pressure entirely and is the recommended procedure after any deploy, since every deploy restarts both apps. `DEPLOYMENT_PROCEDURE.md` in the shadow-cipher repository documents the steps.
+
+**A monitoring caveat worth recording, because it wasted time during this recovery.** The sync progress line is written with carriage returns rather than newlines, so `pm2 logs ... | tail` reports a *stale* percentage that can appear frozen for many minutes while the sync is in fact advancing normally. Read it by splitting on CR instead:
+
+```bash
+tail -c 4000 ~/.pm2/logs/proof-of-spy-out.log | tr '\r' '\n' | grep -oE 'Syncing dust: [0-9]+%' | tail -1
+```
+
+Cross-check with `ps -o pcpu` — a wallet mid-sync sits well above 100% CPU. A full mainnet sync takes a long time regardless, so verify readiness by curling `/api/status` on the box rather than trusting the deploy's green tick, which is the health-check weakness described in §2.
 
 One precaution has already been taken: the 20 GB gp3 root volume (`vol-01ca8f98b7bf06c19`) **had no snapshots at all and is flagged delete-on-termination**. This app's leaderboard lives in an external Postgres (`POSTGRES_URL`) and so is not at risk, but the volume does hold `server/wallet-cache/`, the private-state store, and the sibling shadow-cipher app's entire SQLite database. A full snapshot now exists — `snap-0e32c606a5cd054d0`, tagged `mf-games-pre-recovery`, **completed** — so the stop/start is safe to attempt against that backup.
 
@@ -248,7 +261,11 @@ Resolved in this revision: Issues 1, 2, 3, 4 (claims and the spy leak), 6, and 9
 Remaining, in recommended order:
 
 1. **Set `active: false` on an incorrect guess and wire up `delete_game`** (Issue 5). The off-chain rule is now enforced — a declared session is deleted — but the contract still leaves a lost game `active: true` forever, so it can be re-guessed on-chain and never pruned. This is the largest remaining gap between the shipped code and the documented design.
-2. Add a `GuessWhoSimulator` test suite for the circuits — the ZK logic has no coverage at all.
+
+   The source change itself is a two-line edit: move the `games.insert(..., active: false)` write in `submit_guess` (`contract/src/guess_who.compact:66-71`) out of its `if (is_correct)` block, which is safe because the server calls `submit_guess` exactly once per game. **It requires a toolchain that is not currently available**, which is why it is not already done: the contract declares `pragma language_version >= 0.20`, and changing a circuit means recompiling to regenerate the prover and verifier keys under `src/managed/guess_who/`. Editing the source without recompiling would ship keys that no longer match it — precisely the mismatched-verifier-key failure mode that breaks proof verification at runtime.
+
+   Note also that CI never compiles the contract: `npm run build --workspace=contract` runs `tsc` and copies the committed `src/managed/` artifacts. The `compact` script in `contract/package.json` also invokes `compact` while the installed binary is named `compactc`, so it fails as written. Both need addressing before any circuit change can be released safely.
+2. Extend the circuit tests to execute `create_game` → `submit_guess` against a ledger. The circuit surface and witnesses are covered (`lib/__tests__/circuits.test.ts`); running the proofs needs a proof server in the test environment.
 3. Surface on-chain failure to the player instead of reporting a skipped proof as a win (Issue 7).
 4. Fix the `MAX_POOL_CONCURRENT` reservation logic, which is unreachable as written (Issue 8).
 5. Point the wallet at the configured network rather than hardcoding mainnet (Issue 10).
